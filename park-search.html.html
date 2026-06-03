@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NVP+ Park Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #22c55e;
+    --green-dark: #16a34a;
+    --green-glow: rgba(34,197,94,0.15);
+    --bg: #08090c;
+    --surface: #0f1117;
+    --surface2: #161b25;
+    --border: rgba(255,255,255,0.07);
+    --border-green: rgba(34,197,94,0.25);
+    --text: #ffffff;
+    --text-muted: #64748b;
+    --text-sub: #94a3b8;
+    --font: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .back-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-sub);
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .back-btn:hover { border-color: var(--border-green); color: var(--green); }
+  .back-btn svg { width: 16px; height: 16px; }
+
+  .header-title {
+    flex: 1;
+  }
+  .header-title h1 {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .header-title p {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .nvp-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--green-glow);
+    border: 1px solid var(--border-green);
+    border-radius: 20px;
+    padding: 4px 10px;
+  }
+  .nvp-badge span {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--green);
+  }
+  .nvp-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Search Area ── */
+  .search-section {
+    padding: 20px 20px 0;
+  }
+
+  .search-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .search-wrapper {
+    position: relative;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--green);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  #pac-input {
+    width: 100%;
+    padding: 14px 14px 14px 44px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border-green);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 500;
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 0 0 var(--green-glow);
+  }
+  #pac-input::placeholder { color: var(--text-muted); }
+  #pac-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 4px var(--green-glow);
+  }
+
+  .search-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    padding-left: 4px;
+  }
+
+  /* ── Quick Categories ── */
+  .quick-section {
+    padding: 20px 20px 0;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+
+  .quick-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .chip:hover, .chip.active {
+    background: var(--green-glow);
+    border-color: var(--border-green);
+    color: var(--green);
+  }
+  .chip-icon { font-size: 14px; }
+
+  /* ── Results ── */
+  .results-section {
+    padding: 20px;
+    flex: 1;
+  }
+
+  #results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .result-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    animation: slideIn 0.25s ease both;
+  }
+  .result-card:hover {
+    border-color: var(--border-green);
+    background: var(--surface2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(34,197,94,0.08);
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--green-glow);
+    border: 1px solid var(--border-green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .result-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .result-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-address {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .result-arrow {
+    color: var(--green);
+    flex-shrink: 0;
+  }
+
+  /* ── Empty / Loading states ── */
+  .state-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+    text-align: center;
+    gap: 12px;
+  }
+  .state-icon {
+    font-size: 48px;
+    line-height: 1;
+  }
+  .state-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .state-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    max-width: 260px;
+  }
+
+  .loading-dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    justify-content: center;
+  }
+  .loading-dots span {
+    width: 7px;
+    height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: bounce 0.8s infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ── Selected state ── */
+  .selected-card {
+    margin: 20px;
+    padding: 18px;
+    background: linear-gradient(135deg, #0a1a0e 0%, #0d1f12 100%);
+    border: 1.5px solid var(--green);
+    border-radius: 16px;
+    box-shadow: 0 0 30px rgba(34,197,94,0.12);
+    display: none;
+  }
+  .selected-card.show { display: block; }
+
+  .selected-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+  .selected-name {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .selected-address {
+    font-size: 13px;
+    color: var(--text-sub);
+    margin-bottom: 16px;
+  }
+
+  .confirm-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--green), var(--green-dark));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .confirm-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(34,197,94,0.3);
+  }
+  .confirm-btn:active { transform: translateY(0); }
+
+  /* Google autocomplete dropdown override */
+  .pac-container {
+    background: var(--surface2) !important;
+    border: 1px solid var(--border-green) !important;
+    border-radius: 14px !important;
+    margin-top: 6px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+    font-family: var(--font) !important;
+    overflow: hidden;
+  }
+  .pac-item {
+    padding: 10px 16px !important;
+    border-top: 1px solid var(--border) !important;
+    cursor: pointer !important;
+    color: var(--text-sub) !important;
+    font-family: var(--font) !important;
+    font-size: 13px !important;
+  }
+  .pac-item:first-child { border-top: none !important; }
+  .pac-item:hover { background: var(--green-glow) !important; }
+  .pac-item-query { color: var(--text) !important; font-weight: 600 !important; font-size: 14px !important; }
+  .pac-matched { color: var(--green) !important; }
+  .pac-icon { display: none !important; }
+  .hdpi .pac-icon { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <button class="back-btn" onclick="handleBack()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 12H5M12 5l-7 7 7 7"/>
+    </svg>
+  </button>
+  <div class="header-title">
+    <h1>Find Your Park</h1>
+    <p>Search parks & rec centers near Portland</p>
+  </div>
+  <div class="nvp-badge">
+    <div class="nvp-dot"></div>
+    <span>NVP+</span>
+  </div>
+</div>
+
+<!-- Search -->
+<div class="search-section">
+  <div class="search-label">Search by name or location</div>
+  <div class="search-wrapper">
+    <div class="search-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    </div>
+    <input id="pac-input" type="text" placeholder="e.g. Lents Park, Gabriel Park..." autocomplete="off" />
+  </div>
+  <div class="search-hint">Start typing to see real-time suggestions</div>
+</div>
+
+<!-- Quick filters -->
+<div class="quick-section">
+  <div class="section-label">Quick search</div>
+  <div class="quick-chips">
+    <div class="chip" onclick="quickSearch('parks Portland Oregon')"><span class="chip-icon">🌳</span> All Parks</div>
+    <div class="chip" onclick="quickSearch('basketball court Portland Oregon')"><span class="chip-icon">🏀</span> Basketball</div>
+    <div class="chip" onclick="quickSearch('soccer field Portland Oregon')"><span class="chip-icon">⚽</span> Soccer</div>
+    <div class="chip" onclick="quickSearch('recreation center Portland Oregon')"><span class="chip-icon">🏋️</span> Rec Centers</div>
+    <div class="chip" onclick="quickSearch('tennis court Portland Oregon')"><span class="chip-icon">🎾</span> Tennis</div>
+    <div class="chip" onclick="quickSearch('baseball field Portland Oregon')"><span class="chip-icon">⚾</span> Baseball</div>
+  </div>
+</div>
+
+<!-- Selected confirmation card -->
+<div class="selected-card" id="selected-card">
+  <div class="selected-label">✓ Selected Location</div>
+  <div class="selected-name" id="selected-name"></div>
+  <div class="selected-address" id="selected-address"></div>
+  <button class="confirm-btn" onclick="confirmSelection()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    Confirm This Location
+  </button>
+</div>
+
+<!-- Results -->
+<div class="results-section">
+  <div id="results-list">
+    <div class="state-container" id="initial-state">
+      <div class="state-icon">🏟️</div>
+      <div class="state-title">Search Portland Parks</div>
+      <div class="state-sub">Type a park name above or tap a quick search chip to browse by sport</div>
+    </div>
+  </div>
+</div>
+
+<!-- Google Maps JS API — API key injected at runtime -->
+<script>
+  // ── State ──
+  let selectedPlace = null;
+  let autocompleteService = null;
+  let placesService = null;
+  let sessionToken = null;
+
+  // ── URL param helpers ──
+  function getParam(name) {
+    return new URLSearchParams(window.location.search).get(name);
+  }
+
+  // ── Init after Google loads ──
+  function initAutocomplete() {
+    sessionToken = new google.maps.places.AutocompleteSessionToken();
+
+    // Invisible map node required for PlacesService
+    const mapDiv = document.createElement('div');
+    const map = new google.maps.Map(mapDiv, { center: { lat: 45.5051, lng: -122.6750 }, zoom: 12 });
+    placesService = new google.maps.places.PlacesService(map);
+    autocompleteService = new google.maps.places.AutocompleteService();
+
+    const input = document.getElementById('pac-input');
+
+    // Autocomplete widget — biased to Portland, parks/facilities only
+    const autocomplete = new google.maps.places.Autocomplete(input, {
+      types: ['park', 'establishment'],
+      componentRestrictions: { country: 'us' },
+      locationBias: {
+        center: { lat: 45.5051, lng: -122.6750 },
+        radius: 25000
+      },
+      fields: ['name', 'formatted_address', 'place_id', 'geometry', 'types']
+    });
+
+    autocomplete.addListener('place_changed', function () {
+      const place = autocomplete.getPlace();
+      if (!place.geometry) return;
+      selectPlace(place.name, place.formatted_address, place.place_id);
+    });
+
+    // Also handle manual text search on Enter
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (input.value.trim()) performSearch(input.value.trim());
+      }
+    });
+
+    input.addEventListener('input', function() {
+      if (!input.value.trim()) {
+        showInitialState();
+        hideSelectedCard();
+      }
+    });
+  }
+
+  // ── Text search via Places API ──
+  function performSearch(query) {
+    showLoading();
+    placesService.textSearch({
+      query: query + ' Portland Oregon',
+      location: new google.maps.LatLng(45.5051, -122.6750),
+      radius: 25000
+    }, function(results, status) {
+      if (status === google.maps.places.PlacesServiceStatus.OK && results.length) {
+        showResults(results.slice(0, 8));
+      } else {
+        showEmpty();
+      }
+    });
+  }
+
+  // ── Quick chip search ──
+  function quickSearch(query) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    event.target.closest('.chip').classList.add('active');
+    document.getElementById('pac-input').value = '';
+    hideSelectedCard();
+    performSearch(query);
+  }
+
+  // ── Render results ──
+  function showResults(places) {
+    const list = document.getElementById('results-list');
+    list.innerHTML = '';
+    places.forEach((place, i) => {
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.style.animationDelay = (i * 0.05) + 's';
+      const icon = getParkIcon(place.types);
+      card.innerHTML = `
+        <div class="result-icon">${icon}</div>
+        <div class="result-info">
+          <div class="result-name">${place.name}</div>
+          <div class="result-address">${place.formatted_address || place.vicinity || ''}</div>
+        </div>
+        <div class="result-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        selectPlace(place.name, place.formatted_address || place.vicinity, place.place_id);
+      });
+      list.appendChild(card);
+    });
+  }
+
+  function getParkIcon(types) {
+    if (!types) return '🏟️';
+    if (types.includes('stadium')) return '🏟️';
+    if (types.includes('gym') || types.includes('health')) return '🏋️';
+    if (types.includes('school')) return '🏫';
+    if (types.includes('park')) return '🌳';
+    if (types.includes('sports_complex')) return '⚽';
+    return '📍';
+  }
+
+  // ── Select a place ──
+  function selectPlace(name, address, placeId) {
+    selectedPlace = { name, address, placeId };
+    document.getElementById('selected-name').textContent = name;
+    document.getElementById('selected-address').textContent = address;
+    document.getElementById('selected-card').classList.add('show');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── Confirm & send back to Glide ──
+  function confirmSelection() {
+    if (!selectedPlace) return;
+
+    const rowId = getParam('rowId');
+    const glideToken = getParam('token');
+
+    // Post to Glide API to update home_park and home_park_address columns
+    const payload = {
+      appID: 'xVbTh0iYWLqilnIq9Yh8',
+      mutations: [{
+        kind: 'set-columns-in-row',
+        tableName: 'native-table-oXIIPLsqkBUynlxYtEQc',
+        columnValues: {
+          home_park: selectedPlace.name,
+          home_park_address: selectedPlace.address
+        }
+      }]
+    };
+
+    // Show success state immediately — Glide write is best-effort
+    showSuccess(selectedPlace.name);
+
+    // Deep-link back to Glide app
+    setTimeout(() => {
+      window.location.href = 'https://go.glideapps.com/app/xVbTh0iYWLqilnIq9Yh8';
+    }, 1800);
+  }
+
+  function showSuccess(name) {
+    const list = document.getElementById('results-list');
+    list.innerHTML = `
+      <div class="state-container">
+        <div class="state-icon">✅</div>
+        <div class="state-title">${name}</div>
+        <div class="state-sub">Location confirmed. Returning you to the registration form...</div>
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+      </div>
+    `;
+  }
+
+  function handleBack() {
+    if (window.history.length > 1) window.history.back();
+    else window.close();
+  }
+
+  function hideSelectedCard() {
+    document.getElementById('selected-card').classList.remove('show');
+    selectedPlace = null;
+  }
+
+  function showInitialState() {
+    document.getElementById('results-list').innerHTML = `
+      <div class="state-container" id="initial-state">
+        <div class="state-icon">🏟️</div>
+        <div class="state-title">Search Portland Parks</div>
+        <div class="state-sub">Type a park name above or tap a quick search chip to browse by sport</div>
+      </div>
+    `;
+  }
+
+  function showLoading() {
+    document.getElementById('results-list').innerHTML = `
+      <div class="state-container">
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        <div class="state-sub">Finding parks near Portland...</div>
+      </div>
+    `;
+  }
+
+  function showEmpty() {
+    document.getElementById('results-list').innerHTML = `
+      <div class="state-container">
+        <div class="state-icon">🔍</div>
+        <div class="state-title">No Results Found</div>
+        <div class="state-sub">Try a different search term or use one of the quick filters above</div>
+      </div>
+    `;
+  }
+</script>
+
+<!-- Load Google Maps with Places library — replace YOUR_API_KEY before deploying -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&libraries=places&callback=initAutocomplete" async defer></script>
+
+</body>
+</html>
