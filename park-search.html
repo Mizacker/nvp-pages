@@ -66,7 +66,8 @@
   .selected-address { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; }
   .confirm-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--green), var(--green-dark)); border: none; border-radius: 12px; color: white; font-family: var(--font); font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .confirm-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(34,197,94,0.3); }
-  /* Google autocomplete override */
+  .invalid-toast { margin: 12px 20px 0; padding: 12px 16px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; font-size: 13px; color: #f87171; font-weight: 600; display: none; }
+  .invalid-toast.show { display: block; }
   .pac-container { background: #161b25 !important; border: 1px solid rgba(34,197,94,0.25) !important; border-radius: 14px !important; margin-top: 6px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important; font-family: 'Plus Jakarta Sans', sans-serif !important; overflow: hidden; }
   .pac-item { padding: 10px 16px !important; border-top: 1px solid rgba(255,255,255,0.07) !important; cursor: pointer !important; color: #94a3b8 !important; font-family: 'Plus Jakarta Sans', sans-serif !important; font-size: 13px !important; }
   .pac-item:first-child { border-top: none !important; }
@@ -82,8 +83,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
   </button>
   <div class="header-title">
-    <h1>Find Your Park</h1>
-    <p>Search parks & rec centers near Portland</p>
+    <h1>Find Your Park or Field</h1>
+    <p>Sports venues, parks & rec centers only</p>
   </div>
   <div class="nvp-badge"><div class="nvp-dot"></div><span>NVP+</span></div>
 </div>
@@ -94,10 +95,12 @@
     <div class="search-icon">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     </div>
-    <input id="pac-input" type="text" placeholder="e.g. Lents Park, Gabriel Park..." autocomplete="off" />
+    <input id="pac-input" type="text" placeholder="e.g. Lents Park, Buckman Field..." autocomplete="off" />
   </div>
-  <div class="search-hint">Start typing to see real-time suggestions</div>
+  <div class="search-hint">Parks, fields, courts, gyms, and rec centers only</div>
 </div>
+
+<div id="invalid-toast" class="invalid-toast">⚠️ That location isn't a sports venue. Please select a park, field, court, gym, or rec center.</div>
 
 <div class="quick-section">
   <div class="section-label">Quick search</div>
@@ -125,8 +128,8 @@
   <div id="results-list">
     <div class="state-container">
       <div class="state-icon">🏟️</div>
-      <div class="state-title">Search Portland Parks</div>
-      <div class="state-sub">Type a park name above or tap a quick search chip to browse by sport</div>
+      <div class="state-title">Search Portland Parks & Fields</div>
+      <div class="state-sub">Type a venue name above or tap a quick search chip to browse by sport</div>
     </div>
   </div>
 </div>
@@ -136,8 +139,52 @@
   let autocomplete = null;
   let placesService = null;
 
+  // Allowed Google Places types for sports venues
+  const SPORTS_TYPES = [
+    'park','stadium','gym','sports_complex','university',
+    'school','campground','natural_feature','premise',
+    'establishment'
+  ];
+
+  // Blocked types — hard reject these even if they pass type check
+  const BLOCKED_TYPES = [
+    'book_store','store','restaurant','food','bar','cafe',
+    'lodging','hospital','doctor','dentist','pharmacy',
+    'bank','finance','insurance_agency','real_estate_agency',
+    'hair_care','beauty_salon','spa','shopping_mall',
+    'clothing_store','electronics_store','furniture_store',
+    'home_goods_store','hardware_store','car_dealer',
+    'car_rental','car_repair','gas_station','parking',
+    'lawyer','accounting','travel_agency','church',
+    'hindu_temple','mosque','synagogue','place_of_worship',
+    'museum','art_gallery','library','movie_theater',
+    'amusement_park','zoo','aquarium','night_club'
+  ];
+
+  // Sports/venue keywords in name — accept even if types are generic
+  const SPORTS_KEYWORDS = [
+    'park','field','court','gym','arena','stadium','rec center',
+    'recreation','sports','athletic','pool','track','rink',
+    'pitch','complex','center','centre','playground','turf',
+    'diamond','course','range','hall','pavillion','pavilion',
+    'facility','grounds','bowl','coliseum','garden'
+  ];
+
+  function isSportsVenue(types, name) {
+    if (!types) return false;
+    // Hard block — reject these immediately
+    const hasBlockedType = types.some(t => BLOCKED_TYPES.includes(t));
+    if (hasBlockedType) return false;
+    // Name keyword check — "Lents Park", "Buckman Field", etc.
+    const nameLower = (name || '').toLowerCase();
+    const hasKeyword = SPORTS_KEYWORDS.some(k => nameLower.includes(k));
+    if (hasKeyword) return true;
+    // Type check
+    const hasSportsType = types.some(t => SPORTS_TYPES.includes(t));
+    return hasSportsType;
+  }
+
   function initMap() {
-    // Invisible map for PlacesService
     const mapDiv = document.createElement('div');
     document.body.appendChild(mapDiv);
     const map = new google.maps.Map(mapDiv, {
@@ -148,7 +195,6 @@
 
     const input = document.getElementById('pac-input');
 
-    // Autocomplete — biased to Portland
     autocomplete = new google.maps.places.Autocomplete(input, {
       componentRestrictions: { country: 'us' },
       bounds: new google.maps.LatLngBounds(
@@ -161,15 +207,21 @@
 
     autocomplete.addListener('place_changed', function() {
       const place = autocomplete.getPlace();
-      if (place && place.name) {
-        selectPlace(place.name, place.formatted_address || '', place.place_id);
+      if (!place || !place.name) return;
+      if (!isSportsVenue(place.types, place.name)) {
+        showInvalidToast();
+        input.value = '';
+        hideSelected();
+        return;
       }
+      hideInvalidToast();
+      selectPlace(place.name, place.formatted_address || '', place.place_id);
     });
 
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && input.value.trim()) {
         e.preventDefault();
-        doSearch(input.value.trim() + ' Portland Oregon');
+        doSearch(input.value.trim() + ' park OR field OR court OR rec center Portland Oregon');
       }
     });
 
@@ -177,6 +229,7 @@
       if (!input.value.trim()) {
         showInitial();
         hideSelected();
+        hideInvalidToast();
       }
     });
   }
@@ -186,6 +239,7 @@
     el.classList.add('active');
     document.getElementById('pac-input').value = '';
     hideSelected();
+    hideInvalidToast();
     doSearch(query);
   }
 
@@ -197,7 +251,13 @@
       radius: 30000
     }, function(results, status) {
       if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-        renderResults(results.slice(0, 8));
+        // Filter results to sports venues only
+        const filtered = results.filter(p => isSportsVenue(p.types, p.name));
+        if (filtered.length > 0) {
+          renderResults(filtered.slice(0, 8));
+        } else {
+          renderResults(results.slice(0, 8)); // fallback — show all if filter removes everything
+        }
       } else {
         showEmpty(status);
       }
@@ -221,7 +281,11 @@
         </div>
         <div class="result-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
       `;
-      card.addEventListener('click', () => selectPlace(place.name, addr, place.place_id));
+      card.addEventListener('click', () => {
+        if (!isSportsVenue(place.types, place.name)) { showInvalidToast(); return; }
+        hideInvalidToast();
+        selectPlace(place.name, addr, place.place_id);
+      });
       list.appendChild(card);
     });
   }
@@ -229,10 +293,11 @@
   function getIcon(types) {
     if (!types) return '📍';
     if (types.includes('stadium')) return '🏟️';
-    if (types.includes('gym') || types.includes('health')) return '🏋️';
-    if (types.includes('school')) return '🏫';
+    if (types.includes('gym')) return '🏋️';
+    if (types.includes('school') || types.includes('university')) return '🏫';
     if (types.includes('park')) return '🌳';
-    return '📍';
+    if (types.includes('sports_complex')) return '⚽';
+    return '🏅';
   }
 
   function selectPlace(name, address, placeId) {
@@ -246,13 +311,17 @@
   function confirmSelection() {
     if (!selectedPlace) return;
     showSuccess(selectedPlace.name);
-    // Pass back to Glide via URL parameter on return
     setTimeout(() => {
       const returnUrl = new URLSearchParams(window.location.search).get('return') || 'https://go.glideapps.com/app/xVbTh0iYWLqilnIq9Yh8';
       window.location.href = returnUrl + '?park=' + encodeURIComponent(selectedPlace.name) + '&park_address=' + encodeURIComponent(selectedPlace.address);
     }, 1500);
   }
 
+  function showInvalidToast() {
+    document.getElementById('invalid-toast').classList.add('show');
+    setTimeout(() => hideInvalidToast(), 4000);
+  }
+  function hideInvalidToast() { document.getElementById('invalid-toast').classList.remove('show'); }
   function showSuccess(name) {
     document.getElementById('results-list').innerHTML = `
       <div class="state-container">
@@ -262,34 +331,32 @@
         <div class="loading-dots"><span></span><span></span><span></span></div>
       </div>`;
   }
-
   function handleBack() { if (window.history.length > 1) window.history.back(); else window.close(); }
   function hideSelected() { document.getElementById('selected-card').classList.remove('show'); selectedPlace = null; }
   function showInitial() {
     document.getElementById('results-list').innerHTML = `
       <div class="state-container">
         <div class="state-icon">🏟️</div>
-        <div class="state-title">Search Portland Parks</div>
-        <div class="state-sub">Type a park name above or tap a quick search chip to browse by sport</div>
+        <div class="state-title">Search Portland Parks & Fields</div>
+        <div class="state-sub">Type a venue name above or tap a quick search chip to browse by sport</div>
       </div>`;
   }
   function showLoading() {
     document.getElementById('results-list').innerHTML = `
       <div class="state-container">
         <div class="loading-dots"><span></span><span></span><span></span></div>
-        <div class="state-sub">Finding parks near Portland...</div>
+        <div class="state-sub">Finding sports venues near Portland...</div>
       </div>`;
   }
   function showEmpty(status) {
     document.getElementById('results-list').innerHTML = `
       <div class="state-container">
         <div class="state-icon">🔍</div>
-        <div class="state-title">No Results Found</div>
-        <div class="state-sub">Status: ${status}. Try a different search term or use the quick filters above.</div>
+        <div class="state-title">No Venues Found</div>
+        <div class="state-sub">Try a different search term or use the quick filters above.</div>
       </div>`;
   }
 </script>
-
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
