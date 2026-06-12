@@ -11,7 +11,7 @@ video{width:100%;max-width:100%;border-radius:12px}
 </head>
 <body>
 <video id="adVideo" controls playsinline>
-<source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+<source src="https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
 </video>
 <div id="status">▶️ Watch the full ad to unlock your XP</div>
 <script>
@@ -24,7 +24,7 @@ const status = document.getElementById('status');
 video.addEventListener('ended', function() {
 status.textContent = '✅ Ad complete! Return to the app to claim your XP.';
 status.style.color = '#00d282';
-fetch('WEBHOOK_URL_HERE', {
+fetch('https://hook.us2.make.com/g43fvxoiuo51vneie4l1h8gingu8eipg', {
 method: 'POST',
 headers: {'Content-Type': 'application/json'},
 body: JSON.stringify({email: email, slotId: slotId})
