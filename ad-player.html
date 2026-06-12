@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{margin:0;background:#0a0a0f;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#fff}
+video{width:100%;max-width:100%;border-radius:12px}
+#status{margin-top:16px;font-size:14px;color:#00d282;text-align:center;padding:0 20px}
+</style>
+</head>
+<body>
+<video id="adVideo" controls playsinline>
+<source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+</video>
+<div id="status">▶️ Watch the full ad to unlock your XP</div>
+<script>
+const params = new URLSearchParams(window.location.search);
+const email = params.get('email');
+const slotId = params.get('slot');
+const video = document.getElementById('adVideo');
+const status = document.getElementById('status');
+
+video.addEventListener('ended', function() {
+status.textContent = '✅ Ad complete! Return to the app to claim your XP.';
+status.style.color = '#00d282';
+fetch('WEBHOOK_URL_HERE', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({email: email, slotId: slotId})
+}).catch(function(e) { console.error('Webhook error', e); });
+});
+</script>
+</body>
+</html>
