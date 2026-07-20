@@ -86,7 +86,28 @@
     align-items: center;
     margin-bottom: 16px;
   }
-  .muted { color: #666; font-size: 14px; }
+  .muted { color: #666; font-size: 14px; line-height: 1.5; }
+  .how-it-works {
+    display: flex;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .step {
+    flex: 1;
+    background: #f5faf7;
+    border: 1px solid #dceee3;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 13px;
+  }
+  .step strong {
+    display: block;
+    color: #1a7d4a;
+    margin-bottom: 4px;
+  }
+  .step span {
+    color: #555;
+  }
 </style>
 </head>
 <body>
@@ -283,7 +304,17 @@
       app.innerHTML = `
         <div class="card">
           <h2>Neighborhood Value Plus — Litter Crew</h2>
-          <p class="muted">Enter your email and we'll send a one-time sign-in link. No password needed.</p>
+          <p class="muted">
+            Join neighbors keeping local streets clean. Captains post specific streets
+            that need attention — claim one, clean it, snap a photo, and earn XP once
+            a Captain verifies the work. New members get a free litter grabber + bag kit.
+          </p>
+          <div class="how-it-works">
+            <div class="step"><strong>1. Claim</strong><span>Pick an open job in your neighborhood</span></div>
+            <div class="step"><strong>2. Clean</strong><span>Do the work, mark it complete</span></div>
+            <div class="step"><strong>3. Verify</strong><span>A Captain confirms it, then you earn XP</span></div>
+          </div>
+          <p class="muted" style="margin-top:16px;">Enter your email and we'll send a one-time sign-in link. No password needed.</p>
           ${state.error ? `<div class="error">${esc(state.error)}</div>` : ""}
           <input id="email-input" placeholder="you@email.com" />
           <button id="send-link-btn">Send sign-in link</button>
