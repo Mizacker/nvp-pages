@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Litter Crew — Neighborhood Value Plus</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #fafafa;
+    color: #1a1a1a;
+  }
+  h2 { margin-top: 0; }
+  .card {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    background: #fff;
+  }
+  input {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+  }
+  button {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    background: #1a7d4a;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  button.secondary {
+    background: #fff;
+    color: #1a7d4a;
+    border: 1px solid #1a7d4a;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+    gap: 12px;
+  }
+  .row:last-child { border-bottom: none; }
+  .badge {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #eef6f1;
+    color: #1a7d4a;
+    white-space: nowrap;
+  }
+  .error {
+    color: #b00020;
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    font-size: 15px;
+  }
+  .tab.active { border-bottom-color: #1a7d4a; font-weight: 700; }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .muted { color: #666; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="app">Loading Litter Crew…</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+  // ---------------------------------------------------------
+  // SETUP: paste your real Supabase Publishable key below.
+  // Find it at: Supabase Dashboard > Settings > API Keys > "Publishable key"
+  // It starts with sb_publishable_...
+  // NEVER paste the Secret key (sb_secret_...) here — that key bypasses
+  // every RLS policy and must never appear in a public HTML file.
+  // ---------------------------------------------------------
+  const SUPABASE_URL = "https://uunaaabykbhavngqfitw.supabase.co"
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8IFPal1b20t808ZEzyYeyA_YWQqzjso"
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+
+  const app = document.getElementById("app")
+
+  let state = {
+    session: null,
+    member: null,
+    jobs: [],
+    activeTab: "resident",
+    error: "",
+  }
+
+  // ---------------- AUTH ----------------
+
+  async function init() {
+    const { data } = await supabase.auth.getSession()
+    state.session = data.session
+    supabase.auth.onAuthStateChange((_event, session) => {
+      state.session = session
+      render()
+    })
+    if (state.session) await loadMember()
+    render()
+  }
+
+  async function sendMagicLink(email) {
+    state.error = ""
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href },
+    })
+    if (error) { state.error = error.message; render(); return }
+    renderLinkSent()
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    state.member = null
+    state.session = null
+    render()
+  }
+
+  // ---------------- DATA ----------------
+
+  async function loadMember() {
+    const { data, error } = await supabase
+      .from("litter_crew_members")
+      .select("*")
+      .eq("auth_user_id", state.session.user.id)
+      .maybeSingle()
+    if (error) { state.error = error.message; return }
+    state.member = data
+    if (state.member) await loadJobs()
+  }
+
+  async function loadJobs() {
+    const { data, error } = await supabase
+      .from("litter_jobs")
+      .select("*")
+      .eq("neighborhood_id", state.member.neighborhood_id)
+      .in("status", ["open", "claimed", "submitted"])
+      .order("posted_at", { ascending: false })
+    if (error) { state.error = error.message; return }
+    state.jobs = data || []
+  }
+
+  async function joinLitterCrew(name, neighborhood, address) {
+    state.error = ""
+    if (!name || !neighborhood) { state.error = "Name and neighborhood are required."; render(); return }
+    const { data, error } = await supabase
+      .from("litter_crew_members")
+      .insert({
+        auth_user_id: state.session.user.id,
+        user_id: state.session.user.id,
+        full_name: name,
+        email: state.session.user.email,
+        neighborhood_id: neighborhood,
+        address: address,
+      })
+      .select()
+      .single()
+    if (error) { state.error = error.message; render(); return }
+    state.member = data
+    await loadJobs()
+    render()
+  }
+
+  async function claimJob(jobId) {
+    state.error = ""
+    const { error } = await supabase
+      .from("litter_jobs")
+      .update({ status: "claimed", claimed_by_member_id: state.member.id, claimed_at: new Date().toISOString() })
+      .eq("id", jobId)
+      .eq("status", "open")
+    if (error) { state.error = error.message; render(); return }
+    await loadJobs()
+    render()
+  }
+
+  async function submitCleanup(jobId) {
+    state.error = ""
+    const job = state.jobs.find(j => j.id === jobId)
+    const { error: insertErr } = await supabase.from("cleanup_events").insert({
+      job_id: jobId,
+      member_id: state.member.id,
+      neighborhood_id: state.member.neighborhood_id,
+      street_name: job ? job.street_name : "",
+      cleaned_at: new Date().toISOString(),
+      bags_collected: 1,
+    })
+    if (insertErr) { state.error = insertErr.message; render(); return }
+    const { error: updateErr } = await supabase.from("litter_jobs").update({ status: "submitted" }).eq("id", jobId)
+    if (updateErr) { state.error = updateErr.message; render(); return }
+    await loadJobs()
+    render()
+  }
+
+  async function postNewJob(street, neighborhood) {
+    state.error = ""
+    if (!street || !neighborhood) { state.error = "Street name and neighborhood are required."; render(); return }
+    const capLimit = 3 // TODO: derive from captain tier once that column exists
+    const { data: capData, error: capErr } = await supabase.rpc("increment_captain_action", {
+      p_captain_id: state.member.id, p_cap_limit: capLimit,
+    })
+    if (capErr) { state.error = capErr.message; render(); return }
+    if (capData?.[0]?.cap_reached) { state.error = "Weekly capacity reached — resets Monday."; render(); return }
+    const { error } = await supabase.from("litter_jobs").insert({
+      neighborhood_id: neighborhood, street_name: street, posted_by_captain_id: state.member.id,
+    })
+    if (error) { state.error = error.message; render(); return }
+    await loadJobs()
+    render()
+  }
+
+  async function verifyCleanup(jobId, approve) {
+    state.error = ""
+    const capLimit = 3
+    const { data: capData, error: capErr } = await supabase.rpc("increment_captain_action", {
+      p_captain_id: state.member.id, p_cap_limit: capLimit,
+    })
+    if (capErr) { state.error = capErr.message; render(); return }
+    if (capData?.[0]?.cap_reached) { state.error = "Weekly capacity reached — resets Monday."; render(); return }
+    const { error: jobErr } = await supabase.from("litter_jobs")
+      .update({ status: approve ? "verified" : "rejected" }).eq("id", jobId)
+    if (jobErr) { state.error = jobErr.message; render(); return }
+    const { error: eventErr } = await supabase.from("cleanup_events").update({
+      verified_by_captain_id: state.member.id,
+      verified_at: new Date().toISOString(),
+      xp_awarded: approve ? 150 : 0,
+      rejection_reason: approve ? null : "Not completed",
+    }).eq("job_id", jobId)
+    if (eventErr) { state.error = eventErr.message; render(); return }
+    await loadJobs()
+    render()
+  }
+
+  // ---------------- RENDER ----------------
+
+  function esc(str) {
+    const d = document.createElement("div")
+    d.textContent = str ?? ""
+    return d.innerHTML
+  }
+
+  function renderLinkSent() {
+    app.innerHTML = `
+      <div class="card">
+        <h2>Check your email</h2>
+        <p>We sent a sign-in link. Click it, then come back to this tab.</p>
+      </div>`
+  }
+
+  function render() {
+    if (!state.session) {
+      app.innerHTML = `
+        <div class="card">
+          <h2>Neighborhood Value Plus — Litter Crew</h2>
+          <p class="muted">Enter your email and we'll send a one-time sign-in link. No password needed.</p>
+          ${state.error ? `<div class="error">${esc(state.error)}</div>` : ""}
+          <input id="email-input" placeholder="you@email.com" />
+          <button id="send-link-btn">Send sign-in link</button>
+        </div>`
+      document.getElementById("send-link-btn").onclick = () => {
+        const email = document.getElementById("email-input").value.trim()
+        if (email) sendMagicLink(email)
+      }
+      return
+    }
+
+    if (!state.member) {
+      app.innerHTML = `
+        <div class="card">
+          <h2>Join the Litter Crew</h2>
+          ${state.error ? `<div class="error">${esc(state.error)}</div>` : ""}
+          <input id="name-input" placeholder="Full name" />
+          <input id="hood-input" placeholder="Neighborhood" />
+          <input id="addr-input" placeholder="Address (for kit delivery — optional for now)" />
+          <button id="join-btn">Join Litter Crew</button>
+        </div>`
+      document.getElementById("join-btn").onclick = () => {
+        joinLitterCrew(
+          document.getElementById("name-input").value.trim(),
+          document.getElementById("hood-input").value.trim(),
+          document.getElementById("addr-input").value.trim()
+        )
+      }
+      return
+    }
+
+    const isCaptain = state.member.is_captain
+    const residentJobs = state.jobs.filter(j => j.status === "open" || j.claimed_by_member_id === state.member.id)
+    const pendingVerification = state.jobs.filter(j => j.status === "submitted")
+
+    let html = `
+      <div class="top-bar">
+        <h2>Litter Crew — ${esc(state.member.neighborhood_id)}</h2>
+        <button class="secondary" id="signout-btn">Sign out</button>
+      </div>
+      ${state.error ? `<div class="error">${esc(state.error)}</div>` : ""}
+    `
+
+    if (isCaptain) {
+      html += `
+        <div class="tabs">
+          <div class="tab ${state.activeTab === "resident" ? "active" : ""}" data-tab="resident">Resident View</div>
+          <div class="tab ${state.activeTab === "captain" ? "active" : ""}" data-tab="captain">Captain View</div>
+        </div>`
+    }
+
+    if (state.activeTab === "resident" || !isCaptain) {
+      html += `<div class="card"><h3>Open Jobs Near You</h3>`
+      if (residentJobs.length === 0) {
+        html += `<p class="muted">No open jobs right now — check back soon.</p>`
+      } else {
+        for (const job of residentJobs) {
+          html += `<div class="row">
+            <div><strong>${esc(job.street_name)}</strong> <span class="badge">${esc(job.status)}</span></div>`
+          if (job.status === "open") {
+            html += `<button data-claim="${job.id}">Claim</button>`
+          } else if (job.status === "claimed" && job.claimed_by_member_id === state.member.id) {
+            html += `<button data-submit="${job.id}">Mark Cleaned</button>`
+          } else if (job.status === "submitted" && job.claimed_by_member_id === state.member.id) {
+            html += `<span class="badge">Awaiting Captain review</span>`
+          }
+          html += `</div>`
+        }
+      }
+      html += `</div>`
+    }
+
+    if (isCaptain && state.activeTab === "captain") {
+      html += `
+        <div class="card">
+          <h3>Post a New Job</h3>
+          <input id="new-street" placeholder="Street name" />
+          <input id="new-hood" placeholder="Neighborhood" />
+          <button id="post-job-btn">Post Job</button>
+        </div>
+        <div class="card">
+          <h3>Jobs Awaiting Verification</h3>`
+      if (pendingVerification.length === 0) {
+        html += `<p class="muted">Nothing to verify right now.</p>`
+      } else {
+        for (const job of pendingVerification) {
+          html += `<div class="row">
+            <div><strong>${esc(job.street_name)}</strong></div>
+            <div style="display:flex; gap:8px;">
+              <button data-approve="${job.id}">Approve</button>
+              <button class="secondary" data-reject="${job.id}">Reject</button>
+            </div>
+          </div>`
+        }
+      }
+      html += `</div>`
+    }
+
+    app.innerHTML = html
+
+    document.getElementById("signout-btn").onclick = signOut
+    app.querySelectorAll("[data-tab]").forEach(el => {
+      el.onclick = () => { state.activeTab = el.dataset.tab; render() }
+    })
+    app.querySelectorAll("[data-claim]").forEach(el => {
+      el.onclick = () => claimJob(el.dataset.claim)
+    })
+    app.querySelectorAll("[data-submit]").forEach(el => {
+      el.onclick = () => submitCleanup(el.dataset.submit)
+    })
+    const postBtn = document.getElementById("post-job-btn")
+    if (postBtn) postBtn.onclick = () => {
+      postNewJob(
+        document.getElementById("new-street").value.trim(),
+        document.getElementById("new-hood").value.trim()
+      )
+    }
+    app.querySelectorAll("[data-approve]").forEach(el => {
+      el.onclick = () => verifyCleanup(el.dataset.approve, true)
+    })
+    app.querySelectorAll("[data-reject]").forEach(el => {
+      el.onclick = () => verifyCleanup(el.dataset.reject, false)
+    })
+  }
+
+  init()
+</script>
+
+</body>
+</html>
