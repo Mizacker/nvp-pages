@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Street Sponsorship — Neighborhood Value Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F1B2D;
+    --navy-light: #16273D;
+    --navy-lighter: #1E3350;
+    --gold: #D4A94C;
+    --gold-soft: rgba(212, 169, 76, 0.15);
+    --ivory: #F4F1EA;
+    --muted: #8FA0B8;
+    --error: #E06B6B;
+    --success: #6BBF8F;
+    --border: rgba(212, 169, 76, 0.2);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--navy);
+    color: var(--ivory);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    line-height: 1.5;
+  }
+
+  .card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    max-width: 480px;
+    width: 100%;
+    padding: 40px 36px;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 18px;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: var(--ivory);
+  }
+
+  .muted {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0 0 28px;
+  }
+
+  .price-tag {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    background: var(--gold-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    margin-bottom: 28px;
+  }
+  .price-tag .amount {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gold);
+    font-family: 'Playfair Display', serif;
+  }
+  .price-tag .period {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ivory);
+    margin-bottom: 6px;
+    margin-top: 18px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input, select {
+    width: 100%;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--ivory);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, select:focus {
+    border-color: var(--gold);
+  }
+  input::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23D4A94C' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  button {
+    width: 100%;
+    margin-top: 28px;
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  button:hover { opacity: 0.92; }
+  button:active { transform: scale(0.99); }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .message {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+  .message.error {
+    display: block;
+    background: rgba(224, 107, 107, 0.12);
+    border: 1px solid rgba(224, 107, 107, 0.3);
+    color: var(--error);
+  }
+  .message.success {
+    display: block;
+    background: rgba(107, 191, 143, 0.12);
+    border: 1px solid rgba(107, 191, 143, 0.3);
+    color: var(--success);
+  }
+
+  .disclaimer {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(15, 27, 45, 0.3);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 8px;
+    vertical-align: -3px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="eyebrow">Neighborhood Value Plus</div>
+  <h1>Sponsor Your Street</h1>
+  <p class="muted">
+    Guarantee litter cleanup for your street and get public sponsor recognition on the neighborhood map.
+  </p>
+
+  <div class="price-tag">
+    <span class="amount">$25</span>
+    <span class="period">/ month</span>
+  </div>
+
+  <form id="sponsorship-form">
+    <label for="sponsor_name">Your name</label>
+    <input type="text" id="sponsor_name" placeholder="Jane Doe" required />
+
+    <label for="sponsor_email">Email</label>
+    <input type="email" id="sponsor_email" placeholder="you@email.com" required />
+
+    <label for="neighborhood_id">Neighborhood</label>
+    <select id="neighborhood_id" required>
+      <option value="" disabled selected>Select your neighborhood</option>
+    </select>
+
+    <label for="street_name">Street address</label>
+    <input type="text" id="street_name" placeholder="2800 SE Gladstone St" required />
+
+    <div class="row">
+      <div>
+        <label for="city">City</label>
+        <input type="text" id="city" value="Portland" required />
+      </div>
+      <div>
+        <label for="zipcode">ZIP code</label>
+        <input type="text" id="zipcode" placeholder="97202" required pattern="[0-9]{5}" />
+      </div>
+    </div>
+
+    <button type="submit" id="submit-btn">
+      <span class="spinner" id="spinner"></span>
+      <span id="btn-label">Verify &amp; Continue to Payment</span>
+    </button>
+
+    <div class="message" id="form-message"></div>
+  </form>
+
+  <p class="disclaimer">
+    We'll verify your address before checkout. Only one sponsor is allowed per street at a time. Your sponsorship is a monthly subscription — cancel anytime.
+  </p>
+</div>
+
+<script>
+  const WEBHOOK_URL = "https://hook.us2.make.com/bwui80zhhlnf3v6ng5ydvknv9tupa63r";
+  const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/3cIeVd9R77H05kjaDy5gc0S";
+
+  const SUPABASE_URL = "https://uunaaabykbhavngqfitw.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_8IFPal1b20t808ZEzyYeyA_YWQqzjso";
+
+  const form = document.getElementById('sponsorship-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const btnLabel = document.getElementById('btn-label');
+  const spinner = document.getElementById('spinner');
+  const messageBox = document.getElementById('form-message');
+  const neighborhoodSelect = document.getElementById('neighborhood_id');
+
+  function showMessage(text, type) {
+    messageBox.textContent = text;
+    messageBox.className = 'message ' + type;
+  }
+
+  function setLoading(isLoading) {
+    submitBtn.disabled = isLoading;
+    spinner.style.display = isLoading ? 'inline-block' : 'none';
+    btnLabel.textContent = isLoading ? 'Verifying address…' : 'Verify & Continue to Payment';
+  }
+
+  // Populate neighborhoods from Supabase on page load
+  async function loadNeighborhoods() {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/neighborhoods?select=id,maplabel:properties->>MAPLABEL&order=properties->>MAPLABEL.asc`,
+        {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+      if (!res.ok) throw new Error('Failed to load neighborhoods');
+      const data = await res.json();
+
+      // De-duplicate by display name — some neighborhoods have multiple
+      // rows with identical properties (same MAPLABEL, different id).
+      // Keep the first occurrence of each name so the dropdown doesn't
+      // show the same neighborhood twice.
+      const seen = new Set();
+      data.forEach(n => {
+        if (!n.maplabel || seen.has(n.maplabel)) return;
+        seen.add(n.maplabel);
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = n.maplabel;
+        neighborhoodSelect.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Could not load neighborhoods:', err);
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Unable to load — please refresh';
+      neighborhoodSelect.appendChild(opt);
+    }
+  }
+
+  loadNeighborhoods();
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    messageBox.className = 'message';
+
+    const payload = {
+      neighborhood_id: neighborhoodSelect.value,
+      street_name: document.getElementById('street_name').value.trim(),
+      city: document.getElementById('city').value.trim(),
+      zipcode: document.getElementById('zipcode').value.trim(),
+      sponsor_name: document.getElementById('sponsor_name').value.trim(),
+      sponsor_email: document.getElementById('sponsor_email').value.trim()
+    };
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.lead_id) {
+        showMessage(`Verified: ${result.validated_street}. Redirecting to payment…`, 'success');
+        const stripeUrl = new URL(STRIPE_PAYMENT_LINK);
+        stripeUrl.searchParams.set('client_reference_id', result.lead_id);
+        stripeUrl.searchParams.set('prefilled_email', payload.sponsor_email);
+        setTimeout(() => {
+          window.location.href = stripeUrl.toString();
+        }, 1200);
+      } else {
+        showMessage(result.message || 'Something went wrong. Please try again.', 'error');
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error(err);
+      showMessage('We could not reach the server. Please check your connection and try again.', 'error');
+      setLoading(false);
+    }
+  });
+</script>
+
+</body>
+</html>
