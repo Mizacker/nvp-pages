@@ -1,54 +1,554 @@
--- ============================================================
--- Gladstone St, 20th Ave to Cesar Chavez Blvd (SE 39th)
--- Sponsor: Divine Huntings
--- ============================================================
-insert into public.map_sponsorships (
-  id, street_name, sponsor_display_name, status, sponsor_type,
-  neighborhood_id, stripe_subscription_id
-)
-values (
-  gen_random_uuid(),
-  'Gladstone St',
-  'Divine Huntings',
-  'active',
-  'business',
-  '12', -- placeholder neighborhood_id — replace with the real one for this area if known
-  'sub_divinehuntings_placeholder' -- placeholder since this isn't a paid Stripe sponsorship yet; update if/when real billing starts
-)
-returning id, street_name, matched_segment_id, match_confidence, match_status;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sponsored Streets — Neighborhood Value Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1F17;
+    --surface: #14281F;
+    --surface-raised: #1A3328;
+    --line: #24402F;
+    --ink: #F4F7F2;
+    --ink-soft: #8FA89A;
+    --mint: #3DDC97;
+    --mint-glow: rgba(61, 220, 151, 0.35);
+    --coral: #FF6B4A;
+    --coral-glow: rgba(255, 107, 74, 0.35);
+    --radius: 16px;
+  }
 
--- Once you confirm the row above matched correctly, add the actual service
--- completion (before/after photos) for this segment. Run this separately
--- after filling in real photo URLs and the matched_segment_id from above:
+  * { box-sizing: border-box; }
 
--- insert into public.service_completions (
---   matched_segment_id, service_type, before_photo_url, after_photo_url,
---   team_photo_url, completed_by, completed_at
--- )
--- values (
---   <matched_segment_id from above>,
---   'litter_pickup',
---   '<before photo url>',
---   '<after photo url>',
---   '<team photo url>',
---   'Wendell Wallace III',
---   now()
--- );
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Archivo', 'Helvetica Neue', sans-serif;
+    overflow: hidden;
+  }
 
--- ============================================================
--- 28th Ave — cross streets not yet confirmed, so no map_sponsorships
--- row (nothing to match against yet). Logged as a service_completions
--- entry with matched_segment_id left null for now; revisit once the
--- exact block boundaries are confirmed, then this can be matched
--- properly via the trigram function or updated manually.
--- ============================================================
-insert into public.service_completions (
-  matched_segment_id, service_type, completed_by, completed_at
-)
-values (
-  null, -- pending: confirm exact cross streets, then update to real matched_segment_id
-  'litter_pickup',
-  'Neighborhood Value Plus (interim, pending business sponsor)',
-  now()
-)
-returning id;
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 700px 500px at 15% 0%, rgba(61,220,151,0.14), transparent 60%),
+      radial-gradient(ellipse 600px 500px at 100% 30%, rgba(255,107,74,0.10), transparent 60%);
+    pointer-events: none;
+  }
+
+  header {
+    position: relative;
+    z-index: 2;
+    padding: 22px 32px 18px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(11, 31, 23, 0.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .header-left h1 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+
+  .header-left p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+    max-width: 480px;
+    line-height: 1.5;
+  }
+
+  .header-stats { display: flex; gap: 22px; flex-shrink: 0; }
+  .stat { text-align: right; }
+
+  .stat .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--mint);
+    line-height: 1;
+  }
+
+  .stat .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    margin-top: 3px;
+  }
+
+  #error-banner {
+    display: none;
+    position: relative;
+    z-index: 2;
+    background: rgba(255, 107, 74, 0.15);
+    color: var(--coral);
+    padding: 10px 32px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  #layout { position: relative; z-index: 1; height: calc(100vh - 96px); }
+
+  #map {
+    position: absolute;
+    inset: 0;
+    filter: saturate(0.85) brightness(0.92);
+  }
+
+  #sidebar {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    bottom: 20px;
+    width: 320px;
+    background: rgba(20, 40, 31, 0.72);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow-y: auto;
+    padding: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+
+  #sidebar h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #sidebar h2::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint-glow);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .empty-state {
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 18px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px dashed var(--line);
+  }
+
+  .sponsor-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    transition: border-color 0.15s ease;
+  }
+
+  .sponsor-card:hover { border-color: var(--mint); }
+
+  .sponsor-card img.sponsor-photo {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: var(--surface-raised);
+  }
+
+  .sponsor-card h3 { font-size: 15px; margin: 0 0 3px; font-weight: 700; }
+
+  .sponsor-card .street {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 0 0 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .badge.matched { background: rgba(61, 220, 151, 0.15); color: var(--mint); }
+  .badge.pending { background: rgba(255, 107, 74, 0.15); color: var(--coral); }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  .completion-item {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--line);
+  }
+
+  .completion-item h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 8px;
+    color: var(--ink-soft);
+  }
+
+  .photo-row { display: flex; gap: 6px; }
+  .photo-row figure { margin: 0; flex: 1; min-width: 0; }
+
+  .photo-row img {
+    width: 100%;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--surface-raised);
+    display: block;
+  }
+
+  .photo-row figcaption {
+    font-size: 9px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .completed-by { font-size: 11px; color: var(--ink-soft); margin-top: 6px; }
+
+  .team-photo-wrap { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+
+  .team-photo-wrap img {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface-raised);
+  }
+
+  .info-window-content { font-family: 'Archivo', sans-serif; max-width: 220px; }
+  .info-window-content h3 { margin: 0 0 4px; font-size: 15px; }
+  .info-window-content img {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+
+  .gm-style .gm-style-iw-c {
+    background: var(--surface) !important;
+    color: var(--ink) !important;
+    border-radius: 12px !important;
+  }
+
+  @media (max-width: 760px) {
+    #sidebar { width: calc(100% - 40px); top: auto; bottom: 20px; max-height: 45%; }
+    .header-stats { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Sponsored Streets</h1>
+    <p>The city maintains the roads. See who's stepped up on yours — live.</p>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <div class="num" id="stat-sponsors">—</div>
+      <div class="label">Active</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="stat-streets">43,042</div>
+      <div class="label">Streets tracked</div>
+    </div>
+  </div>
+</header>
+
+<div id="error-banner"></div>
+
+<div id="layout">
+  <div id="map"></div>
+  <div id="sidebar">
+    <h2>Live Sponsorships</h2>
+    <div id="sponsor-list">
+      <div class="empty-state">Loading sponsored streets…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://uunaaabykbhavngqfitw.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1bmFhYWJ5a2JoYXZuZ3FmaXR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NDM4MzUsImV4cCI6MjA2OTExOTgzNX0.S-zLL1TXOl2z5t0AnKJkacB-gwsh_hn3AKh0LG-HXPA';
+
+  const PORTLAND_CENTER = { lat: 45.5152, lng: -122.6784 };
+
+  const MAP_DARK_STYLE = [
+    { elementType: 'geometry', stylers: [{ color: '#14281F' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#0B1F17' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#8FA89A' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1A3328' }] },
+    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#1F3D2C' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#24402F' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0B1F17' }] },
+    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#24402F' }] }
+  ];
+
+  let map;
+  let infoWindow;
+
+  function showError(message) {
+    const banner = document.getElementById('error-banner');
+    banner.textContent = message;
+    banner.style.display = 'block';
+  }
+
+  async function supabaseGet(path) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) throw new Error(`Supabase request failed (${res.status}): ${path}`);
+    return res.json();
+  }
+
+  async function fetchCenterlines(segmentIds) {
+    if (segmentIds.length === 0) return [];
+    const idList = segmentIds.join(',');
+    return supabaseGet(`rpc/get_centerlines_geojson?ids=${encodeURIComponent(idList)}`);
+  }
+
+  async function fetchSponsorships() {
+    return supabaseGet('map_sponsorships_public?select=*');
+  }
+
+  async function fetchCompletions(segmentIds) {
+    if (segmentIds.length === 0) return [];
+    const idList = segmentIds.map(id => `matched_segment_id.eq.${id}`).join(',');
+    return supabaseGet(`service_completions?or=(${idList})&select=*&order=completed_at.desc`);
+  }
+
+  function renderSidebar(sponsorships, completionsBySegment) {
+    document.getElementById('stat-sponsors').textContent = sponsorships.length;
+
+    const list = document.getElementById('sponsor-list');
+    if (sponsorships.length === 0) {
+      list.innerHTML = '<div class="empty-state">No active sponsorships yet. Be the first to claim your street.</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    sponsorships.forEach(sponsor => {
+      const card = document.createElement('div');
+      card.className = 'sponsor-card';
+
+      const photoHtml = sponsor.photo_url
+        ? `<img class="sponsor-photo" src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">`
+        : '';
+
+      const isMatched = sponsor.match_status === 'matched';
+      const badgeHtml = `<span class="badge ${isMatched ? 'matched' : 'pending'}">${isMatched ? 'Verified' : 'Pending review'}</span>`;
+
+      const completions = completionsBySegment[sponsor.matched_segment_id] || [];
+      const completionsHtml = completions.map(c => {
+        const before = c.before_photo_url ? `<figure><img src="${c.before_photo_url}" alt="Before"><figcaption>Before</figcaption></figure>` : '';
+        const after = c.after_photo_url ? `<figure><img src="${c.after_photo_url}" alt="After"><figcaption>After</figcaption></figure>` : '';
+        const team = c.team_photo_url
+          ? `<div class="team-photo-wrap"><img src="${c.team_photo_url}" alt="${c.completed_by || 'Team'}"><span class="completed-by">${c.completed_by || ''}</span></div>`
+          : (c.completed_by ? `<div class="completed-by">${c.completed_by}</div>` : '');
+        const date = c.completed_at ? new Date(c.completed_at).toLocaleDateString() : '';
+        return `
+          <div class="completion-item">
+            <h4>${c.service_type || 'Service'} ${date ? '&middot; ' + date : ''}</h4>
+            <div class="photo-row">${before}${after}</div>
+            ${team}
+          </div>
+        `;
+      }).join('');
+
+      card.innerHTML = `
+        ${photoHtml}
+        ${badgeHtml}
+        <h3>${sponsor.sponsor_display_name}</h3>
+        <p class="street">${sponsor.street_name}</p>
+        ${completionsHtml}
+      `;
+      list.appendChild(card);
+    });
+  }
+
+  function drawSegment(map, geojsonGeometry, sponsor) {
+    return map.data.addGeoJson({
+      type: 'Feature',
+      geometry: geojsonGeometry,
+      properties: { sponsor_id: sponsor.id }
+    })[0];
+  }
+
+  async function init() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: PORTLAND_CENTER,
+      zoom: 12,
+      styles: MAP_DARK_STYLE,
+      disableDefaultUI: true,
+      zoomControl: true
+    });
+
+    infoWindow = new google.maps.InfoWindow();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          map.setCenter({ lat: position.coords.latitude, lng: position.coords.longitude });
+          map.setZoom(14);
+        },
+        (err) => console.log('Geolocation not available, using default center.', err.message)
+      );
+    }
+
+    let sponsorships = [];
+    try {
+      sponsorships = await fetchSponsorships();
+    } catch (err) {
+      showError('Could not load sponsorship data. Please try again shortly.');
+      console.error(err);
+      return;
+    }
+
+    const matchedSponsors = sponsorships.filter(s => s.matched_segment_id);
+    const unmatchedSponsors = sponsorships.filter(s => !s.matched_segment_id);
+    const segmentIds = matchedSponsors.map(s => s.matched_segment_id);
+
+    let centerlines = [];
+    let completions = [];
+    try {
+      [centerlines, completions] = await Promise.all([
+        fetchCenterlines(segmentIds),
+        fetchCompletions(segmentIds)
+      ]);
+    } catch (err) {
+      showError('Some map details could not be loaded, showing what is available.');
+      console.error(err);
+    }
+
+    const centerlineById = {};
+    centerlines.forEach(c => { centerlineById[c.id] = c; });
+
+    const completionsBySegment = {};
+    completions.forEach(c => {
+      if (!completionsBySegment[c.matched_segment_id]) completionsBySegment[c.matched_segment_id] = [];
+      completionsBySegment[c.matched_segment_id].push(c);
+    });
+
+    map.data.setStyle({
+      strokeColor: '#3DDC97',
+      strokeWeight: 5,
+      strokeOpacity: 0.9
+    });
+
+    matchedSponsors.forEach(sponsor => {
+      const centerline = centerlineById[sponsor.matched_segment_id];
+      if (!centerline || !centerline.geojson) return;
+      try {
+        drawSegment(map, JSON.parse(centerline.geojson), sponsor);
+      } catch (err) {
+        console.error('Could not parse geometry for segment', sponsor.matched_segment_id, err);
+      }
+    });
+
+    map.data.addListener('click', (event) => {
+      const sponsorId = event.feature.getProperty('sponsor_id');
+      const sponsor = sponsorships.find(s => s.id === sponsorId);
+      if (!sponsor) return;
+      const photoHtml = sponsor.photo_url ? `<img src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">` : '';
+      infoWindow.setContent(`<div class="info-window-content">${photoHtml}<h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}</p></div>`);
+      infoWindow.setPosition(event.latLng);
+      infoWindow.open(map);
+    });
+
+    unmatchedSponsors.forEach(sponsor => {
+      if (sponsor.latitude == null || sponsor.longitude == null) return;
+      const marker = new google.maps.Marker({
+        position: { lat: sponsor.latitude, lng: sponsor.longitude },
+        map,
+        title: sponsor.sponsor_display_name,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#FF6B4A',
+          fillOpacity: 1,
+          strokeWeight: 2,
+          strokeColor: '#0B1F17'
+        }
+      });
+      marker.addListener('click', () => {
+        infoWindow.setContent(`<div class="info-window-content"><h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}<br><em>Pending location verification</em></p></div>`);
+        infoWindow.setPosition(marker.getPosition());
+        infoWindow.open(map);
+      });
+    });
+
+    renderSidebar(sponsorships, completionsBySegment);
+
+    const bounds = new google.maps.LatLngBounds();
+    let hasBoundableContent = false;
+
+    map.data.forEach((feature) => {
+      feature.getGeometry().forEachLatLng((latLng) => {
+        bounds.extend(latLng);
+        hasBoundableContent = true;
+      });
+    });
+
+    unmatchedSponsors.forEach(sponsor => {
+      if (sponsor.latitude != null && sponsor.longitude != null) {
+        bounds.extend({ lat: sponsor.latitude, lng: sponsor.longitude });
+        hasBoundableContent = true;
+      }
+    });
+
+    if (hasBoundableContent) {
+      map.fitBounds(bounds);
+      google.maps.event.addListenerOnce(map, 'bounds_changed', () => {
+        if (map.getZoom() > 16) map.setZoom(16);
+      });
+    }
+  }
+
+  window.initMap = init;
+</script>
+
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&callback=initMap&loading=async"></script>
+
+</body>
+</html>
