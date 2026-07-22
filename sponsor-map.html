@@ -348,18 +348,7 @@
 
   const PORTLAND_CENTER = { lat: 45.5152, lng: -122.6784 };
 
-  const MAP_DARK_STYLE = [
-    { elementType: 'geometry', stylers: [{ color: '#14281F' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#0B1F17' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#8FA89A' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1A3328' }] },
-    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#1F3D2C' }] },
-    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#24402F' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0B1F17' }] },
-    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-    { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#24402F' }] }
-  ];
+  const MAP_ID = '35e98e58e37c21e68f92fe43';
 
   let map;
   let infoWindow;
@@ -450,6 +439,71 @@
     });
   }
 
+  function getLineMidpoint(geojsonGeometry) {
+    // Works for LineString geometry — takes all coordinate points and
+    // returns the middle one (or interpolates between the two middle
+    // points for an even-length array). Good enough for the short,
+    // roughly-straight street segments this app deals with.
+    let coords = geojsonGeometry.type === 'MultiLineString'
+      ? geojsonGeometry.coordinates[0]
+      : geojsonGeometry.coordinates;
+
+    if (!coords || coords.length === 0) return null;
+
+    const midIdx = Math.floor(coords.length / 2);
+    const [lng, lat] = coords[midIdx];
+    return { lat, lng };
+  }
+
+  function addSponsorLogoMarker(map, geojsonGeometry, sponsor) {
+    const midpoint = getLineMidpoint(geojsonGeometry);
+    if (!midpoint) return;
+
+    const hasLogo = !!sponsor.photo_url;
+
+    const markerContent = document.createElement('div');
+    markerContent.style.cssText = `
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: ${hasLogo ? 'var(--panel-surface)' : 'var(--mint)'};
+      border: 2px solid var(--mint);
+      box-shadow: 0 0 12px var(--mint-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+    `;
+
+    if (hasLogo) {
+      const img = document.createElement('img');
+      img.src = sponsor.photo_url;
+      img.alt = sponsor.sponsor_display_name;
+      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      markerContent.appendChild(img);
+    } else {
+      markerContent.textContent = (sponsor.sponsor_display_name || '?').charAt(0);
+      markerContent.style.color = 'var(--bg)';
+      markerContent.style.fontFamily = "'Archivo Black', sans-serif";
+      markerContent.style.fontSize = '14px';
+    }
+
+    const marker = new google.maps.marker.AdvancedMarkerElement({
+      map,
+      position: midpoint,
+      content: markerContent,
+      title: sponsor.sponsor_display_name
+    });
+
+    marker.addListener('click', () => {
+      const photoHtml = sponsor.photo_url ? `<img src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">` : '';
+      infoWindow.setContent(`<div class="info-window-content">${photoHtml}<h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}</p></div>`);
+      infoWindow.setPosition(midpoint);
+      infoWindow.open(map);
+    });
+  }
+
   function drawSegment(map, geojsonGeometry, sponsor) {
     return map.data.addGeoJson({
       type: 'Feature',
@@ -462,7 +516,7 @@
     map = new google.maps.Map(document.getElementById('map'), {
       center: PORTLAND_CENTER,
       zoom: 12,
-      styles: MAP_DARK_STYLE,
+      mapId: MAP_ID,
       disableDefaultUI: true,
       zoomControl: true
     });
@@ -523,7 +577,9 @@
       const centerline = centerlineById[sponsor.matched_segment_id];
       if (!centerline || !centerline.geojson) return;
       try {
-        drawSegment(map, JSON.parse(centerline.geojson), sponsor);
+        const geometry = JSON.parse(centerline.geojson);
+        drawSegment(map, geometry, sponsor);
+        addSponsorLogoMarker(map, geometry, sponsor);
       } catch (err) {
         console.error('Could not parse geometry for segment', sponsor.matched_segment_id, err);
       }
@@ -591,7 +647,7 @@
   window.initMap = init;
 </script>
 
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&callback=initMap&loading=async"></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&callback=initMap&loading=async&libraries=marker"></script>
 
 </body>
 </html>
