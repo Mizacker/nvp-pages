@@ -20,9 +20,7 @@
     --success: #6BBF8F;
     --border: rgba(212, 169, 76, 0.2);
   }
-
   * { box-sizing: border-box; }
-
   body {
     margin: 0;
     background: var(--navy);
@@ -35,7 +33,6 @@
     padding: 40px 20px;
     line-height: 1.5;
   }
-
   .card {
     background: var(--navy-light);
     border: 1px solid var(--border);
@@ -44,7 +41,6 @@
     width: 100%;
     padding: 40px 36px;
   }
-
   .eyebrow {
     display: flex;
     align-items: center;
@@ -63,7 +59,6 @@
     height: 1px;
     background: var(--gold);
   }
-
   h1 {
     font-family: 'Playfair Display', serif;
     font-size: 28px;
@@ -71,13 +66,7 @@
     margin: 0 0 12px;
     color: var(--ivory);
   }
-
-  .muted {
-    color: var(--muted);
-    font-size: 15px;
-    margin: 0 0 28px;
-  }
-
+  .muted { color: var(--muted); font-size: 15px; margin: 0 0 28px; }
   .price-tag {
     display: inline-flex;
     align-items: baseline;
@@ -88,17 +77,8 @@
     padding: 6px 14px;
     margin-bottom: 28px;
   }
-  .price-tag .amount {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--gold);
-    font-family: 'Playfair Display', serif;
-  }
-  .price-tag .period {
-    font-size: 13px;
-    color: var(--muted);
-  }
-
+  .price-tag .amount { font-size: 20px; font-weight: 700; color: var(--gold); font-family: 'Playfair Display', serif; }
+  .price-tag .period { font-size: 13px; color: var(--muted); }
   label {
     display: block;
     font-size: 13px;
@@ -108,7 +88,6 @@
     margin-top: 18px;
   }
   label:first-of-type { margin-top: 0; }
-
   input, select {
     width: 100%;
     background: var(--navy);
@@ -121,14 +100,8 @@
     outline: none;
     transition: border-color 0.2s;
   }
-  input:focus, select:focus {
-    border-color: var(--gold);
-  }
-  input::placeholder {
-    color: var(--muted);
-    opacity: 0.7;
-  }
-
+  input:focus, select:focus { border-color: var(--gold); }
+  input::placeholder { color: var(--muted); opacity: 0.7; }
   select {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23D4A94C' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
@@ -136,12 +109,38 @@
     background-position: right 14px center;
     padding-right: 36px;
   }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+  .file-drop {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--navy);
   }
+  .file-drop:hover, .file-drop.dragover { border-color: var(--gold); background: var(--gold-soft); }
+  .file-drop input[type="file"] { display: none; }
+  .file-drop-label { color: var(--muted); font-size: 13px; }
+  .file-drop-label strong { color: var(--gold); }
+  .logo-preview { margin-top: 10px; display: none; align-items: center; gap: 10px; }
+  .logo-preview img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: var(--navy-lighter); }
+  .logo-preview .preview-text { font-size: 13px; color: var(--ivory); }
+  .logo-preview .remove-logo {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    width: auto;
+    margin-top: 0;
+    padding: 0;
+  }
+  .upload-status { font-size: 12px; color: var(--muted); margin-top: 6px; display: none; }
+  .optional-tag { font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: 0; }
 
   button {
     width: 100%;
@@ -159,18 +158,9 @@
   }
   button:hover { opacity: 0.92; }
   button:active { transform: scale(0.99); }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .message {
-    margin-top: 16px;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 14px;
-    display: none;
-  }
+  .message { margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 14px; display: none; }
   .message.error {
     display: block;
     background: rgba(224, 107, 107, 0.12);
@@ -183,14 +173,7 @@
     border: 1px solid rgba(107, 191, 143, 0.3);
     color: var(--success);
   }
-
-  .disclaimer {
-    margin-top: 24px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-
+  .disclaimer { margin-top: 24px; font-size: 12px; color: var(--muted); line-height: 1.5; }
   .spinner {
     display: none;
     width: 16px;
@@ -245,6 +228,34 @@
       </div>
     </div>
 
+    <label>Your logo <span class="optional-tag">(optional — shown on the public map once approved)</span></label>
+    <div class="file-drop" id="file-drop">
+      <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" />
+      <div class="file-drop-label" id="file-drop-label">
+        <strong>Click to upload</strong> or drag a logo here<br>PNG, JPG, or WebP — under 2MB
+      </div>
+    </div>
+    <div class="logo-preview" id="logo-preview">
+      <img id="logo-preview-img" alt="Logo preview">
+      <span class="preview-text" id="logo-preview-text"></span>
+      <button type="button" class="remove-logo" id="remove-logo">Remove</button>
+    </div>
+    <div class="upload-status" id="upload-status"></div>
+
+    <label>Before photo <span class="optional-tag">(optional — what your street looks like today)</span></label>
+    <div class="file-drop" id="before-file-drop">
+      <input type="file" id="before-file" accept="image/png,image/jpeg,image/webp" />
+      <div class="file-drop-label" id="before-file-drop-label">
+        <strong>Click to upload</strong> or drag a photo here<br>PNG, JPG, or WebP — under 2MB
+      </div>
+    </div>
+    <div class="logo-preview" id="before-preview">
+      <img id="before-preview-img" alt="Before photo preview">
+      <span class="preview-text" id="before-preview-text"></span>
+      <button type="button" class="remove-logo" id="remove-before">Remove</button>
+    </div>
+    <div class="upload-status" id="before-upload-status"></div>
+
     <button type="submit" id="submit-btn">
       <span class="spinner" id="spinner"></span>
       <span id="btn-label">Verify &amp; Continue to Payment</span>
@@ -254,7 +265,7 @@
   </form>
 
   <p class="disclaimer">
-    We'll verify your address before checkout. Only one sponsor is allowed per street at a time. Your sponsorship is a monthly subscription — cancel anytime.
+    We'll verify your address before checkout. Only one sponsor is allowed per street at a time. Your sponsorship is a monthly subscription — cancel anytime. Uploaded logos are reviewed before appearing on the public map.
   </p>
 </div>
 
@@ -265,12 +276,35 @@
   const SUPABASE_URL = "https://uunaaabykbhavngqfitw.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_8IFPal1b20t808ZEzyYeyA_YWQqzjso";
 
+  const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
+
   const form = document.getElementById('sponsorship-form');
   const submitBtn = document.getElementById('submit-btn');
   const btnLabel = document.getElementById('btn-label');
   const spinner = document.getElementById('spinner');
   const messageBox = document.getElementById('form-message');
   const neighborhoodSelect = document.getElementById('neighborhood_id');
+
+  const fileDrop = document.getElementById('file-drop');
+  const fileInput = document.getElementById('logo-file');
+  const fileDropLabel = document.getElementById('file-drop-label');
+  const logoPreview = document.getElementById('logo-preview');
+  const logoPreviewImg = document.getElementById('logo-preview-img');
+  const logoPreviewText = document.getElementById('logo-preview-text');
+  const removeLogoBtn = document.getElementById('remove-logo');
+  const uploadStatus = document.getElementById('upload-status');
+
+  const beforeFileDrop = document.getElementById('before-file-drop');
+  const beforeFileInput = document.getElementById('before-file');
+  const beforeFileDropLabel = document.getElementById('before-file-drop-label');
+  const beforePreview = document.getElementById('before-preview');
+  const beforePreviewImg = document.getElementById('before-preview-img');
+  const beforePreviewText = document.getElementById('before-preview-text');
+  const removeBeforeBtn = document.getElementById('remove-before');
+  const beforeUploadStatus = document.getElementById('before-upload-status');
+
+  let uploadedLogoUrl = null;
+  let uploadedBeforePhotoUrl = null;
 
   function showMessage(text, type) {
     messageBox.textContent = text;
@@ -283,7 +317,108 @@
     btnLabel.textContent = isLoading ? 'Verifying address…' : 'Verify & Continue to Payment';
   }
 
-  // Populate neighborhoods from Supabase on page load
+  function setupFileUpload(config) {
+    const {
+      dropEl, inputEl, labelEl, previewEl, previewImgEl,
+      previewTextEl, removeBtnEl, statusEl, onUploaded
+    } = config;
+
+    dropEl.addEventListener('click', () => inputEl.click());
+    dropEl.addEventListener('dragover', (e) => { e.preventDefault(); dropEl.classList.add('dragover'); });
+    dropEl.addEventListener('dragleave', () => dropEl.classList.remove('dragover'));
+    dropEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropEl.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+    inputEl.addEventListener('change', () => {
+      if (inputEl.files.length > 0) handleFile(inputEl.files[0]);
+    });
+    removeBtnEl.addEventListener('click', () => {
+      onUploaded(null);
+      inputEl.value = '';
+      previewEl.style.display = 'none';
+      labelEl.style.display = 'block';
+      statusEl.style.display = 'none';
+    });
+
+    async function handleFile(file) {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        statusEl.textContent = 'Please upload a PNG, JPG, or WebP image.';
+        statusEl.style.color = 'var(--error)';
+        statusEl.style.display = 'block';
+        return;
+      }
+      if (file.size > MAX_LOGO_SIZE) {
+        statusEl.textContent = 'File is too large — please keep it under 2MB.';
+        statusEl.style.color = 'var(--error)';
+        statusEl.style.display = 'block';
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      previewImgEl.src = previewUrl;
+      previewTextEl.textContent = file.name;
+      previewEl.style.display = 'flex';
+      labelEl.style.display = 'none';
+
+      statusEl.textContent = 'Uploading…';
+      statusEl.style.color = 'var(--muted)';
+      statusEl.style.display = 'block';
+
+      try {
+        const url = await uploadFileToSupabase(file);
+        onUploaded(url);
+        statusEl.textContent = 'Uploaded successfully.';
+        statusEl.style.color = 'var(--success)';
+      } catch (err) {
+        console.error('Upload failed:', err);
+        onUploaded(null);
+        statusEl.textContent = 'Upload failed — you can still submit without this, or try again.';
+        statusEl.style.color = 'var(--error)';
+      }
+    }
+  }
+
+  async function uploadFileToSupabase(file) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/sponsor-logos/${fileName}`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': file.type
+        },
+        body: file
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Upload failed (${res.status}): ${errText}`);
+    }
+
+    return `${SUPABASE_URL}/storage/v1/object/public/sponsor-logos/${fileName}`;
+  }
+
+  setupFileUpload({
+    dropEl: fileDrop, inputEl: fileInput, labelEl: fileDropLabel,
+    previewEl: logoPreview, previewImgEl: logoPreviewImg, previewTextEl: logoPreviewText,
+    removeBtnEl: removeLogoBtn, statusEl: uploadStatus,
+    onUploaded: (url) => { uploadedLogoUrl = url; if (url) uploadStatus.textContent = 'Uploaded — will be reviewed before appearing on the map.'; }
+  });
+
+  setupFileUpload({
+    dropEl: beforeFileDrop, inputEl: beforeFileInput, labelEl: beforeFileDropLabel,
+    previewEl: beforePreview, previewImgEl: beforePreviewImg, previewTextEl: beforePreviewText,
+    removeBtnEl: removeBeforeBtn, statusEl: beforeUploadStatus,
+    onUploaded: (url) => { uploadedBeforePhotoUrl = url; }
+  });
+
   async function loadNeighborhoods() {
     try {
       const res = await fetch(
@@ -298,10 +433,6 @@
       if (!res.ok) throw new Error('Failed to load neighborhoods');
       const data = await res.json();
 
-      // De-duplicate by display name — some neighborhoods have multiple
-      // rows with identical properties (same MAPLABEL, different id).
-      // Keep the first occurrence of each name so the dropdown doesn't
-      // show the same neighborhood twice.
       const seen = new Set();
       data.forEach(n => {
         if (!n.maplabel || seen.has(n.maplabel)) return;
@@ -321,6 +452,35 @@
   }
 
   loadNeighborhoods();
+
+  async function attachUploadsToLead(leadId) {
+    if (!leadId) return;
+    const patchBody = {};
+    if (uploadedLogoUrl) patchBody.logo_url = uploadedLogoUrl;
+    if (uploadedBeforePhotoUrl) patchBody.before_photo_url = uploadedBeforePhotoUrl;
+    if (Object.keys(patchBody).length === 0) return;
+
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/sponsorship_leads?id=eq.${leadId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(patchBody)
+        }
+      );
+      if (!res.ok) {
+        console.error('Could not attach uploads to lead:', await res.text());
+      }
+    } catch (err) {
+      console.error('Error attaching uploads to lead:', err);
+    }
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -347,6 +507,8 @@
       const result = await res.json();
 
       if (result.success && result.lead_id) {
+        attachUploadsToLead(result.lead_id);
+
         showMessage(`Verified: ${result.validated_street}. Redirecting to payment…`, 'success');
         const stripeUrl = new URL(STRIPE_PAYMENT_LINK);
         stripeUrl.searchParams.set('client_reference_id', result.lead_id);
