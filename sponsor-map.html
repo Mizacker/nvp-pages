@@ -302,13 +302,34 @@
     background: var(--panel-surface-raised);
   }
 
-  .info-window-content { font-family: 'Archivo', sans-serif; max-width: 220px; }
-  .info-window-content h3 { margin: 0 0 4px; font-size: 15px; }
+  /* Google's InfoWindow wraps our content in its own chrome (the .gm-style-iw-c
+     rule above already recolors that chrome). We only control what's INSIDE —
+     so all sizing/spacing here has to be self-contained and not rely on the
+     outer Google-generated frame having any particular size. */
+  .info-window-content {
+    font-family: 'Archivo', sans-serif;
+    width: 200px;
+    padding: 2px 2px 6px;
+    box-sizing: border-box;
+  }
+
+  .info-window-content h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    line-height: 1.3;
+    padding-right: 18px; /* keep clear of Google's own close button */
+  }
+
+  .info-window-content p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
 
   .info-window-content .iw-links {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
+    margin-top: 10px;
     flex-wrap: wrap;
   }
 
@@ -317,9 +338,10 @@
     font-weight: 600;
     color: #14281F;
     text-decoration: none;
-    padding: 4px 9px;
+    padding: 5px 10px;
     border-radius: 20px;
     background: #3DDC97;
+    white-space: nowrap;
   }
 
   /* Lightbox for before/after photo click-through */
@@ -588,7 +610,7 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: ${hasLogo ? '#fff' : sponsorColor};
+      background: ${hasLogo ? '#ffffff' : sponsorColor};
       border: 2px solid ${sponsorColor};
       box-shadow: 0 0 12px ${sponsorColor}80;
       display: flex;
@@ -599,11 +621,24 @@
     `;
 
     if (hasLogo) {
+      // Solid white backing behind the image itself (not just the outer div)
+      // so a transparent-background logo with dark text never blends into
+      // whatever's behind the marker on the actual map tiles.
+      const logoBacking = document.createElement('div');
+      logoBacking.style.cssText = `
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
       const img = document.createElement('img');
       img.src = sponsor.photo_url;
       img.alt = sponsor.sponsor_display_name;
       img.style.cssText = 'width: 78%; height: 78%; object-fit: contain;';
-      markerContent.appendChild(img);
+      logoBacking.appendChild(img);
+      markerContent.appendChild(logoBacking);
     } else {
       markerContent.textContent = (sponsor.sponsor_display_name || '?').charAt(0);
       markerContent.style.color = 'var(--bg)';
