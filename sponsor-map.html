@@ -313,7 +313,7 @@
 <header>
   <div class="header-left">
     <div class="header-brand">
-      <img src="nvp-logo.png" alt="Neighborhood Value Plus" class="header-logo">
+      <img src="Studio-Project.png" alt="Neighborhood Value Plus" class="header-logo">
       <h1>Sponsored Streets</h1>
     </div>
     <p>The city maintains the roads. See who's stepped up on yours — live.</p>
@@ -405,7 +405,10 @@
         : '';
 
       const isMatched = sponsor.match_status === 'matched';
-      const badgeHtml = `<span class="badge ${isMatched ? 'matched' : 'pending'}">${isMatched ? 'Verified' : 'Pending review'}</span>`;
+      const sponsorColor = colorForSponsor(sponsor.id);
+      const badgeHtml = isMatched
+        ? `<span class="badge" style="background:${sponsorColor}26;color:${sponsorColor};">Verified</span>`
+        : `<span class="badge pending">Pending review</span>`;
 
       const completions = completionsBySegment[sponsor.matched_segment_id] || [];
       const completionsHtml = completions.map(c => {
@@ -439,6 +442,19 @@
     });
   }
 
+  function colorForSponsor(sponsorId) {
+    // Deterministic hash of the sponsor's UUID into a hue (0-360),
+    // so each sponsor always gets the same color on every load —
+    // not random per page view, and spread out via the golden-angle
+    // trick so adjacent sponsors don't end up visually similar.
+    let hash = 0;
+    for (let i = 0; i < sponsorId.length; i++) {
+      hash = (hash * 31 + sponsorId.charCodeAt(i)) >>> 0;
+    }
+    const hue = (hash * 137.508) % 360; // golden angle spacing
+    return `hsl(${hue}, 70%, 58%)`;
+  }
+
   function getLineMidpoint(geojsonGeometry) {
     // Works for LineString geometry — takes all coordinate points and
     // returns the middle one (or interpolates between the two middle
@@ -460,15 +476,16 @@
     if (!midpoint) return;
 
     const hasLogo = !!sponsor.photo_url;
+    const sponsorColor = colorForSponsor(sponsor.id);
 
     const markerContent = document.createElement('div');
     markerContent.style.cssText = `
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: ${hasLogo ? 'var(--panel-surface)' : 'var(--mint)'};
-      border: 2px solid var(--mint);
-      box-shadow: 0 0 12px var(--mint-glow);
+      background: ${hasLogo ? 'var(--panel-surface)' : sponsorColor};
+      border: 2px solid ${sponsorColor};
+      box-shadow: 0 0 12px ${sponsorColor}80;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -567,10 +584,14 @@
       completionsBySegment[c.matched_segment_id].push(c);
     });
 
-    map.data.setStyle({
-      strokeColor: '#3DDC97',
-      strokeWeight: 5,
-      strokeOpacity: 0.9
+    map.data.setStyle((feature) => {
+      const sponsorId = feature.getProperty('sponsor_id');
+      const color = sponsorId ? colorForSponsor(sponsorId) : '#3DDC97';
+      return {
+        strokeColor: color,
+        strokeWeight: 5,
+        strokeOpacity: 0.9
+      };
     });
 
     matchedSponsors.forEach(sponsor => {
