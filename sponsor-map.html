@@ -516,9 +516,7 @@
 <div id="error-banner"></div>
 
 <div id="layout">
-  <div id="map">
-    <div id="sponsor-popup"></div>
-  </div>
+  <div id="map"></div>
   <div id="sidebar">
     <h2>Live Sponsorships</h2>
     <div id="sponsor-list">
@@ -688,35 +686,43 @@
   }
 
   let popupOverlay;
+  let popupEl;
 
-  // A minimal OverlayView subclass whose only job is converting a lat/lng
-  // into pixel coordinates on every draw, so our plain HTML popup div can
-  // be positioned correctly and stay pinned to the map through pan/zoom —
-  // without using google.maps.InfoWindow's un-stylable chrome at all.
+  // A minimal OverlayView subclass. Its whole job is participating in
+  // Google's pane/projection system so we can convert a lat/lng into
+  // correct pixel coordinates on every map redraw — the popup DOM element
+  // itself must be moved into Google's own overlay pane in onAdd() for
+  // getProjection() to ever return a working projection. Skipping that
+  // step (as an earlier version of this file did) means draw() silently
+  // no-ops forever, which is why clicking previously did nothing visible.
   function createPopupOverlay(map) {
     class PopupOverlay extends google.maps.OverlayView {
-      constructor() {
+      constructor(el) {
         super();
+        this.el = el;
         this.position = null;
         this.setMap(map);
       }
-      onAdd() {}
-      onRemove() {}
+      onAdd() {
+        this.getPanes().floatPane.appendChild(this.el);
+      }
+      onRemove() {
+        if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
+      }
       draw() {
         if (!this.position) return;
         const proj = this.getProjection();
         if (!proj) return;
         const point = proj.fromLatLngToDivPixel(this.position);
-        const el = document.getElementById('sponsor-popup');
-        el.style.left = `${point.x}px`;
-        el.style.top = `${point.y}px`;
+        this.el.style.left = `${point.x}px`;
+        this.el.style.top = `${point.y}px`;
       }
       setPosition(latLng) {
         this.position = latLng;
         this.draw();
       }
     }
-    return new PopupOverlay();
+    return new PopupOverlay(popupEl);
   }
 
   function popupDetailRow(label, value) {
@@ -725,7 +731,6 @@
   }
 
   function openSponsorPopup(sponsor, latLng) {
-    const el = document.getElementById('sponsor-popup');
     const logoHtml = sponsor.photo_url
       ? `<img class="popup-logo" src="${sponsor.photo_url}" alt="">`
       : '';
@@ -734,7 +739,7 @@
     const badgeText = isMatched ? 'Verified sponsor' : 'Pending review';
     const linksHtml = renderSponsorLinks(sponsor, 'popup-links');
 
-    el.innerHTML = `
+    popupEl.innerHTML = `
       <button class="popup-close" aria-label="Close">&times;</button>
       <div class="popup-header">
         ${logoHtml}
@@ -748,14 +753,14 @@
       ${popupDetailRow('Since', sponsor.started_at ? new Date(sponsor.started_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '')}
       ${linksHtml}
     `;
-    el.querySelector('.popup-close').addEventListener('click', closeSponsorPopup);
+    popupEl.querySelector('.popup-close').addEventListener('click', closeSponsorPopup);
 
-    el.classList.add('open');
+    popupEl.classList.add('open');
     popupOverlay.setPosition(latLng);
   }
 
   function closeSponsorPopup() {
-    document.getElementById('sponsor-popup').classList.remove('open');
+    popupEl.classList.remove('open');
   }
 
   function addSponsorLogoMarker(map, geojsonGeometry, sponsor) {
@@ -835,6 +840,8 @@
       zoomControl: true
     });
 
+    popupEl = document.createElement('div');
+    popupEl.id = 'sponsor-popup';
     popupOverlay = createPopupOverlay(map);
     map.addListener('click', closeSponsorPopup);
 
