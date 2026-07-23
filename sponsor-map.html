@@ -772,9 +772,9 @@
 
     const markerContent = document.createElement('div');
     markerContent.style.cssText = `
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
       background: ${hasLogo ? '#ffffff' : sponsorColor};
       border: 2px solid ${sponsorColor};
       box-shadow: 0 0 12px ${sponsorColor}80;
@@ -801,7 +801,7 @@
       const img = document.createElement('img');
       img.src = sponsor.photo_url;
       img.alt = sponsor.sponsor_display_name;
-      img.style.cssText = 'width: 78%; height: 78%; object-fit: contain;';
+      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
       logoBacking.appendChild(img);
       markerContent.appendChild(logoBacking);
     } else {
