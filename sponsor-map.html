@@ -20,8 +20,6 @@
     --coral-glow: rgba(255, 107, 74, 0.35);
     --radius: 16px;
 
-    /* Sidebar gets its own true near-black charcoal, deliberately distinct
-       from the map's green family so it reads as a separate surface */
     --panel-bg: #16161A;
     --panel-surface: #202024;
     --panel-surface-raised: #2A2A30;
@@ -90,10 +88,11 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    object-fit: cover;
-    background: var(--panel-surface-raised);
+    object-fit: contain;
+    background: #fff;
     border: 1px solid var(--panel-line);
     flex-shrink: 0;
+    padding: 3px;
   }
 
   .header-logo {
@@ -204,15 +203,6 @@
 
   .sponsor-card:hover { border-color: var(--mint); }
 
-  .sponsor-card img.sponsor-photo {
-    width: 100%;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    background: var(--panel-surface-raised);
-  }
-
   .sponsor-card h3 { font-size: 15px; margin: 0 0 3px; font-weight: 700; }
 
   .sponsor-card .street {
@@ -221,6 +211,27 @@
     margin: 0 0 10px;
     font-family: 'JetBrains Mono', monospace;
   }
+
+  .sponsor-links {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 10px;
+    flex-wrap: wrap;
+  }
+
+  .sponsor-links a {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mint);
+    text-decoration: none;
+    padding: 5px 10px;
+    border: 1px solid rgba(61,220,151,0.3);
+    border-radius: 20px;
+    background: rgba(61,220,151,0.08);
+    transition: background 0.15s ease;
+  }
+
+  .sponsor-links a:hover { background: rgba(61,220,151,0.18); }
 
   .badge {
     display: inline-flex;
@@ -256,6 +267,8 @@
   .photo-row { display: flex; gap: 6px; }
   .photo-row figure { margin: 0; flex: 1; min-width: 0; }
 
+  .photo-row a { display: block; cursor: pointer; }
+
   .photo-row img {
     width: 100%;
     height: 72px;
@@ -263,7 +276,10 @@
     border-radius: 6px;
     background: var(--panel-surface-raised);
     display: block;
+    transition: opacity 0.15s ease;
   }
+
+  .photo-row a:hover img { opacity: 0.82; }
 
   .photo-row figcaption {
     font-size: 9px;
@@ -288,12 +304,64 @@
 
   .info-window-content { font-family: 'Archivo', sans-serif; max-width: 220px; }
   .info-window-content h3 { margin: 0 0 4px; font-size: 15px; }
-  .info-window-content img {
-    width: 100%;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 8px;
+
+  .info-window-content .iw-links {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .info-window-content .iw-links a {
+    font-size: 11px;
+    font-weight: 600;
+    color: #14281F;
+    text-decoration: none;
+    padding: 4px 9px;
+    border-radius: 20px;
+    background: #3DDC97;
+  }
+
+  /* Lightbox for before/after photo click-through */
+  #photo-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(11, 31, 23, 0.92);
+    backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+  }
+
+  #photo-lightbox.open { display: flex; }
+
+  #photo-lightbox img {
+    max-width: 90vw;
+    max-height: 85vh;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  #photo-lightbox .lightbox-caption {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  #photo-lightbox .lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 28px;
+    font-size: 28px;
+    color: var(--ink);
+    cursor: pointer;
+    line-height: 1;
   }
 
   .gm-style .gm-style-iw-c {
@@ -342,6 +410,12 @@
   </div>
 </div>
 
+<div id="photo-lightbox">
+  <span class="lightbox-close">&times;</span>
+  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox-caption" id="lightbox-caption"></div>
+</div>
+
 <script>
   const SUPABASE_URL = 'https://uunaaabykbhavngqfitw.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1bmFhYWJ5a2JoYXZuZ3FmaXR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NDM4MzUsImV4cCI6MjA2OTExOTgzNX0.S-zLL1TXOl2z5t0AnKJkacB-gwsh_hn3AKh0LG-HXPA';
@@ -358,6 +432,16 @@
     banner.textContent = message;
     banner.style.display = 'block';
   }
+
+  function openLightbox(src, caption) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-caption').textContent = caption || '';
+    document.getElementById('photo-lightbox').classList.add('open');
+  }
+
+  document.getElementById('photo-lightbox').addEventListener('click', () => {
+    document.getElementById('photo-lightbox').classList.remove('open');
+  });
 
   async function supabaseGet(path) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -386,6 +470,30 @@
     return supabaseGet(`service_completions?or=(${idList})&select=*&order=completed_at.desc`);
   }
 
+  function safeUrl(url) {
+    if (!url) return null;
+    try {
+      const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+      return u.href;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderSponsorLinks(sponsor, containerClass) {
+    const links = [];
+    const website = safeUrl(sponsor.website_url);
+    if (website) {
+      links.push(`<a href="${website}" target="_blank" rel="noopener">Website</a>`);
+    }
+    if (sponsor.instagram_url) {
+      const ig = safeUrl(sponsor.instagram_url);
+      if (ig) links.push(`<a href="${ig}" target="_blank" rel="noopener">Instagram</a>`);
+    }
+    if (links.length === 0) return '';
+    return `<div class="${containerClass}">${links.join('')}</div>`;
+  }
+
   function renderSidebar(sponsorships, completionsBySegment) {
     document.getElementById('stat-sponsors').textContent = sponsorships.length;
 
@@ -400,10 +508,6 @@
       const card = document.createElement('div');
       card.className = 'sponsor-card';
 
-      const photoHtml = sponsor.photo_url
-        ? `<img class="sponsor-photo" src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">`
-        : '';
-
       const isMatched = sponsor.match_status === 'matched';
       const sponsorColor = colorForSponsor(sponsor.id);
       const badgeHtml = isMatched
@@ -412,8 +516,14 @@
 
       const completions = completionsBySegment[sponsor.matched_segment_id] || [];
       const completionsHtml = completions.map(c => {
-        const before = c.before_photo_url ? `<figure><img src="${c.before_photo_url}" alt="Before"><figcaption>Before</figcaption></figure>` : '';
-        const after = c.after_photo_url ? `<figure><img src="${c.after_photo_url}" alt="After"><figcaption>After</figcaption></figure>` : '';
+        const beforeCaption = `${sponsor.sponsor_display_name} — Before`;
+        const afterCaption = `${sponsor.sponsor_display_name} — After`;
+        const before = c.before_photo_url
+          ? `<figure><a onclick="openLightbox('${c.before_photo_url}','${beforeCaption.replace(/'/g, "\\'")}')"><img src="${c.before_photo_url}" alt="Before"></a><figcaption>Before</figcaption></figure>`
+          : '';
+        const after = c.after_photo_url
+          ? `<figure><a onclick="openLightbox('${c.after_photo_url}','${afterCaption.replace(/'/g, "\\'")}')"><img src="${c.after_photo_url}" alt="After"></a><figcaption>After</figcaption></figure>`
+          : '';
         const team = c.team_photo_url
           ? `<div class="team-photo-wrap"><img src="${c.team_photo_url}" alt="${c.completed_by || 'Team'}"><span class="completed-by">${c.completed_by || ''}</span></div>`
           : (c.completed_by ? `<div class="completed-by">${c.completed_by}</div>` : '');
@@ -427,15 +537,13 @@
         `;
       }).join('');
 
-      const logoChipHtml = sponsor.photo_url
-        ? `<img class="sponsor-logo-chip" src="${sponsor.photo_url}" alt="">`
-        : `<div class="sponsor-logo-chip" style="display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--panel-ink-soft);">${(sponsor.sponsor_display_name || '?').charAt(0)}</div>`;
+      const linksHtml = renderSponsorLinks(sponsor, 'sponsor-links');
 
       card.innerHTML = `
-        ${photoHtml}
         ${badgeHtml}
-        <div class="sponsor-name-row">${logoChipHtml}<h3>${sponsor.sponsor_display_name}</h3></div>
+        <h3>${sponsor.sponsor_display_name}</h3>
         <p class="street">${sponsor.street_name}</p>
+        ${linksHtml}
         ${completionsHtml}
       `;
       list.appendChild(card);
@@ -443,23 +551,15 @@
   }
 
   function colorForSponsor(sponsorId) {
-    // Deterministic hash of the sponsor's UUID into a hue (0-360),
-    // so each sponsor always gets the same color on every load —
-    // not random per page view, and spread out via the golden-angle
-    // trick so adjacent sponsors don't end up visually similar.
     let hash = 0;
     for (let i = 0; i < sponsorId.length; i++) {
       hash = (hash * 31 + sponsorId.charCodeAt(i)) >>> 0;
     }
-    const hue = (hash * 137.508) % 360; // golden angle spacing
+    const hue = (hash * 137.508) % 360;
     return `hsl(${hue}, 70%, 58%)`;
   }
 
   function getLineMidpoint(geojsonGeometry) {
-    // Works for LineString geometry — takes all coordinate points and
-    // returns the middle one (or interpolates between the two middle
-    // points for an even-length array). Good enough for the short,
-    // roughly-straight street segments this app deals with.
     let coords = geojsonGeometry.type === 'MultiLineString'
       ? geojsonGeometry.coordinates[0]
       : geojsonGeometry.coordinates;
@@ -469,6 +569,11 @@
     const midIdx = Math.floor(coords.length / 2);
     const [lng, lat] = coords[midIdx];
     return { lat, lng };
+  }
+
+  function infoWindowHtml(sponsor) {
+    const linksHtml = renderSponsorLinks(sponsor, 'iw-links');
+    return `<div class="info-window-content"><h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}</p>${linksHtml}</div>`;
   }
 
   function addSponsorLogoMarker(map, geojsonGeometry, sponsor) {
@@ -483,7 +588,7 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: ${hasLogo ? 'var(--panel-surface)' : sponsorColor};
+      background: ${hasLogo ? '#fff' : sponsorColor};
       border: 2px solid ${sponsorColor};
       box-shadow: 0 0 12px ${sponsorColor}80;
       display: flex;
@@ -497,7 +602,7 @@
       const img = document.createElement('img');
       img.src = sponsor.photo_url;
       img.alt = sponsor.sponsor_display_name;
-      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      img.style.cssText = 'width: 78%; height: 78%; object-fit: contain;';
       markerContent.appendChild(img);
     } else {
       markerContent.textContent = (sponsor.sponsor_display_name || '?').charAt(0);
@@ -514,8 +619,7 @@
     });
 
     marker.addListener('click', () => {
-      const photoHtml = sponsor.photo_url ? `<img src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">` : '';
-      infoWindow.setContent(`<div class="info-window-content">${photoHtml}<h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}</p></div>`);
+      infoWindow.setContent(infoWindowHtml(sponsor));
       infoWindow.setPosition(midpoint);
       infoWindow.open(map);
     });
@@ -610,8 +714,7 @@
       const sponsorId = event.feature.getProperty('sponsor_id');
       const sponsor = sponsorships.find(s => s.id === sponsorId);
       if (!sponsor) return;
-      const photoHtml = sponsor.photo_url ? `<img src="${sponsor.photo_url}" alt="${sponsor.sponsor_display_name}">` : '';
-      infoWindow.setContent(`<div class="info-window-content">${photoHtml}<h3>${sponsor.sponsor_display_name}</h3><p>${sponsor.street_name}</p></div>`);
+      infoWindow.setContent(infoWindowHtml(sponsor));
       infoWindow.setPosition(event.latLng);
       infoWindow.open(map);
     });
