@@ -1045,54 +1045,38 @@
     if (!sidebar || !handle) return;
 
     let startY = 0;
-    let startTranslateWasExpanded = false;
-    let dragging = false;
+    let moved = false;
 
     function toggle(forceExpand) {
       const expand = forceExpand !== undefined
         ? forceExpand
         : !sidebar.classList.contains('expanded');
       sidebar.classList.toggle('expanded', expand);
-      sidebar.style.transform = ''; // let CSS class-based transform take over
     }
 
     handle.addEventListener('click', () => {
-      if (dragging) return; // avoid triggering a click right after a drag
+      if (moved) return; // a swipe already decided the state; ignore the click that follows
       toggle();
     });
 
+    // Simple swipe-direction detection (not live-follow-the-finger — that
+    // required inline transform styles that fought with the height-based
+    // CSS above and caused a stale partial-open visual glitch). This just
+    // reads the overall direction of the gesture once it ends.
     handle.addEventListener('touchstart', (e) => {
       startY = e.touches[0].clientY;
-      startTranslateWasExpanded = sidebar.classList.contains('expanded');
-      dragging = false;
+      moved = false;
     }, { passive: true });
 
     handle.addEventListener('touchmove', (e) => {
-      const dy = e.touches[0].clientY - startY;
-      if (Math.abs(dy) > 6) dragging = true;
-      if (!dragging) return;
-      // Follow the finger while dragging, clamped so it can't be dragged
-      // fully off-screen or above its expanded position.
-      const clamped = Math.max(0, dy);
-      if (startTranslateWasExpanded) {
-        sidebar.style.transform = `translateY(${clamped}px)`;
-      } else {
-        const collapsedOffset = sidebar.offsetHeight - 96;
-        const next = Math.min(collapsedOffset, Math.max(0, collapsedOffset + dy));
-        sidebar.style.transform = `translateY(${next}px)`;
-      }
+      if (Math.abs(e.touches[0].clientY - startY) > 10) moved = true;
     }, { passive: true });
 
     handle.addEventListener('touchend', (e) => {
+      if (!moved) return;
       const dy = e.changedTouches[0].clientY - startY;
-      sidebar.style.transform = '';
-      if (!dragging) return; // was a tap, already handled by click
-      if (startTranslateWasExpanded) {
-        toggle(dy < 60); // dragged down far enough → collapse
-      } else {
-        toggle(dy > -60 ? false : true); // dragged up far enough → expand
-      }
-      setTimeout(() => { dragging = false; }, 50);
+      toggle(dy < 0); // swiped up → expand, swiped down → collapse
+      setTimeout(() => { moved = false; }, 50);
     });
   }
 
