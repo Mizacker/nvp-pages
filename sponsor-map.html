@@ -495,14 +495,22 @@
       right: 0;
       bottom: 0;
       width: 100%;
-      height: 96px; /* collapsed: fixed height, not transform-based, so
-                       nothing below the peek label can ever be visible */
+      height: 96px;
       max-height: 96px;
       border-radius: 20px 20px 0 0;
       transition: height 0.28s cubic-bezier(0.32, 0.72, 0, 1),
                   max-height 0.28s cubic-bezier(0.32, 0.72, 0, 1);
       padding-top: 8px;
       overflow: hidden;
+    }
+
+    /* Belt-and-suspenders fix: overflow:hidden + max-height on a plain
+       block parent doesn't reliably clip block children in every browser
+       (this is a documented CSS quirk, not specific to this page) — so
+       directly hide the list content when collapsed instead of trusting
+       the parent's overflow alone to do it. */
+    #sidebar:not(.expanded) #sponsor-list {
+      display: none;
     }
 
     #sidebar.expanded {
@@ -608,6 +616,7 @@
   const MAP_ID = '35e98e58e37c21e68f92fe43';
 
   let map;
+  const sponsorPositions = {}; // sponsor.id -> {lat, lng}, so sidebar cards can locate their marker on click
 
   function showError(message) {
     const banner = document.getElementById('error-banner');
@@ -730,8 +739,29 @@
         ${linksHtml}
         ${completionsHtml}
       `;
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        // Don't hijack clicks on the sponsor's own links or before/after
+        // photos inside the card — only the card body itself locates the pin.
+        if (e.target.closest('a')) return;
+        locateSponsorOnMap(sponsor);
+      });
       list.appendChild(card);
     });
+  }
+
+  function locateSponsorOnMap(sponsor) {
+    const pos = sponsorPositions[sponsor.id];
+    if (!pos || !map) return;
+    const latLng = new google.maps.LatLng(pos.lat, pos.lng);
+    map.panTo(latLng);
+    if (map.getZoom() < 15) map.setZoom(15);
+    openSponsorPopup(sponsor, latLng);
+    // On mobile/tablet, collapse the bottom sheet so the now-panned map
+    // and the opened popup are actually visible instead of staying hidden
+    // behind the still-expanded sheet.
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.remove('expanded');
   }
 
   function colorForSponsor(sponsorId) {
@@ -836,6 +866,7 @@
   function addSponsorLogoMarker(map, geojsonGeometry, sponsor) {
     const midpoint = getLineMidpoint(geojsonGeometry);
     if (!midpoint) return;
+    sponsorPositions[sponsor.id] = midpoint;
 
     const hasLogo = !!sponsor.photo_url;
     const sponsorColor = colorForSponsor(sponsor.id);
@@ -990,6 +1021,7 @@
 
     unmatchedSponsors.forEach(sponsor => {
       if (sponsor.latitude == null || sponsor.longitude == null) return;
+      sponsorPositions[sponsor.id] = { lat: sponsor.latitude, lng: sponsor.longitude };
       const marker = new google.maps.Marker({
         position: { lat: sponsor.latitude, lng: sponsor.longitude },
         map,
