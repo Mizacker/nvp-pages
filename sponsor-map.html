@@ -495,17 +495,20 @@
       right: 0;
       bottom: 0;
       width: 100%;
-      max-height: 78vh;
+      height: 96px; /* collapsed: fixed height, not transform-based, so
+                       nothing below the peek label can ever be visible */
+      max-height: 96px;
       border-radius: 20px 20px 0 0;
-      transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-      transform: translateY(calc(100% - 96px)); /* peek state by default */
+      transition: height 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+                  max-height 0.28s cubic-bezier(0.32, 0.72, 0, 1);
       padding-top: 8px;
-      overflow: hidden; /* collapsed: nothing below the peek label should show */
+      overflow: hidden;
     }
 
     #sidebar.expanded {
-      transform: translateY(0);
-      overflow-y: auto; /* expanded: restore normal scrolling list behavior */
+      height: auto;
+      max-height: 78vh;
+      overflow-y: auto;
     }
 
     #sheet-handle {
