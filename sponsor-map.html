@@ -478,6 +478,65 @@
 
   .gm-style .gm-style-iw-c { display: none; }
 
+  /* Layer toggle control — lets users show/hide Sponsors and Coverage
+     Zones independently, per the standard "Layer List" map UI pattern.
+     This matters once many sponsors and zones coexist and start to
+     visually compete for attention on the same map. */
+  #layer-toggle {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    background: rgba(22, 22, 26, 0.90);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--panel-line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    font-family: 'Archivo', sans-serif;
+  }
+
+  #layer-toggle .toggle-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--panel-ink-soft);
+    margin-bottom: 8px;
+  }
+
+  #layer-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  #layer-toggle input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--mint);
+    cursor: pointer;
+  }
+
+  #layer-toggle .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 1024px) {
+    #layer-toggle {
+      top: 12px;
+      left: 12px;
+      padding: 10px 12px;
+    }
+  }
+
   #sheet-handle {
     display: none;
   }
@@ -576,6 +635,19 @@
 
 <div id="layout">
   <div id="map"></div>
+  <div id="layer-toggle">
+    <div class="toggle-title">Show on map</div>
+    <label>
+      <input type="checkbox" id="toggle-sponsors" checked>
+      <span class="swatch" style="background:#FF6B4A;"></span>
+      Sponsors
+    </label>
+    <label>
+      <input type="checkbox" id="toggle-zones" checked>
+      <span class="swatch" style="background:#3DDC97;"></span>
+      Coverage Zones
+    </label>
+  </div>
   <div id="sidebar">
     <div id="sheet-handle">
       <div class="bar"></div>
@@ -604,6 +676,9 @@
 
   let map;
   const sponsorPositions = {};
+  const sponsorMarkers = []; // collected so they can be passed to MarkerClusterer
+  let sponsorClusterer = null;
+  let zoneClusterer = null;
 
   function showError(message) {
     const banner = document.getElementById('error-banner');
@@ -894,6 +969,8 @@
     marker.addListener('click', () => {
       openSponsorPopup(sponsor, new google.maps.LatLng(midpoint.lat, midpoint.lng));
     });
+
+    sponsorMarkers.push(marker);
   }
 
   function drawSegment(map, geojsonGeometry, sponsor) {
@@ -917,6 +994,10 @@
   const ZONE_DEFAULT_FILL = '#3DDC97';
   const ZONE_DEFAULT_STROKE = '#3DDC97';
   const zonePolygons = [];
+  const zoneLogoMarkers = []; // separate from zonePolygons — these are the
+                               // clickable logo pins, needed so clustering
+                               // (which only works on point markers, not
+                               // polygons) has something to actually cluster
 
   async function fetchCoverageZones() {
     return supabaseGet('map_coverage_zones?select=*');
@@ -948,6 +1029,67 @@
     });
 
     zonePolygons.push(polygon);
+
+    // Logo pin at the zone's center — same visual treatment as a sponsor's
+    // street-line logo marker, and following the exact same
+    // photo_url + logo_approved pattern already used for sponsor rows
+    // (map_sponsorships), so the moderation gate stays consistent across
+    // the whole map rather than introducing a second, different rule
+    // just for zones.
+    const center = zoneCenter(zone);
+    const hasLogo = !!zone.photo_url && zone.logo_approved === true;
+    const markerColor = fillColor;
+
+    const markerContent = document.createElement('div');
+    markerContent.style.cssText = `
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: ${hasLogo ? '#ffffff' : markerColor};
+      border: 2px solid ${markerColor};
+      box-shadow: 0 0 12px ${markerColor}80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+    `;
+
+    if (hasLogo) {
+      const logoBacking = document.createElement('div');
+      logoBacking.style.cssText = `
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+      const img = document.createElement('img');
+      img.src = zone.photo_url;
+      img.alt = zone.sponsor_display_name || zone.zone_name;
+      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      logoBacking.appendChild(img);
+      markerContent.appendChild(logoBacking);
+    } else {
+      markerContent.textContent = (zone.sponsor_display_name || zone.zone_name || '?').charAt(0);
+      markerContent.style.color = 'var(--bg)';
+      markerContent.style.fontFamily = "'Archivo Black', sans-serif";
+      markerContent.style.fontSize = '13px';
+    }
+
+    const logoMarker = new google.maps.marker.AdvancedMarkerElement({
+      map,
+      position: center,
+      content: markerContent,
+      title: zone.zone_name
+    });
+
+    logoMarker.addListener('click', () => {
+      openZonePopup(zone, center);
+    });
+
+    zoneLogoMarkers.push(logoMarker);
   }
 
   function zoneCenter(zone) {
@@ -1099,7 +1241,25 @@
 
     renderSidebar(sponsorships, completionsBySegment);
     setupBottomSheet();
-    initCoverageZones(map);
+    await initCoverageZones(map);
+
+    // Clustering — groups nearby markers into a single numbered bubble
+    // until zoomed in, per the standard cluster-marker pattern used by
+    // map products at scale (e.g. INVOLI's air-traffic map). Sponsors and
+    // zone logo-pins are clustered separately so a sponsor pin and a zone
+    // pin never merge into one ambiguous bubble together.
+    if (window.markerClusterer) {
+      if (sponsorMarkers.length > 0) {
+        sponsorClusterer = new markerClusterer.MarkerClusterer({ map, markers: sponsorMarkers });
+      }
+      if (zoneLogoMarkers.length > 0) {
+        zoneClusterer = new markerClusterer.MarkerClusterer({ map, markers: zoneLogoMarkers });
+      }
+    } else {
+      console.warn('MarkerClusterer library not loaded — markers will render individually, uncluttered but without grouping at scale.');
+    }
+
+    setupLayerToggle();
 
     const bounds = new google.maps.LatLngBounds();
     let hasBoundableContent = false;
@@ -1163,9 +1323,49 @@
     });
   }
 
+  // Layer toggle — connects the two checkboxes to actually show/hide each
+  // group. Individual markers get their .map property toggled directly;
+  // clusterers (if active) get cleared/re-added since MarkerClusterer
+  // manages its own internal marker map separately from the markers'
+  // own .map property.
+  function setupLayerToggle() {
+    const sponsorsCheckbox = document.getElementById('toggle-sponsors');
+    const zonesCheckbox = document.getElementById('toggle-zones');
+    if (!sponsorsCheckbox || !zonesCheckbox) return;
+
+    function setSponsorsVisible(visible) {
+      if (sponsorClusterer) {
+        sponsorClusterer.clearMarkers();
+        if (visible) sponsorClusterer.addMarkers(sponsorMarkers);
+      } else {
+        sponsorMarkers.forEach(m => { m.map = visible ? map : null; });
+      }
+      // Unmatched sponsors (plain google.maps.Marker circles) and the
+      // sponsor street-lines (map.data layer) aren't part of the
+      // clusterer/marker array above, so toggle them directly too.
+      map.data.forEach(feature => {
+        map.data.overrideStyle(feature, { visible });
+      });
+    }
+
+    function setZonesVisible(visible) {
+      if (zoneClusterer) {
+        zoneClusterer.clearMarkers();
+        if (visible) zoneClusterer.addMarkers(zoneLogoMarkers);
+      } else {
+        zoneLogoMarkers.forEach(m => { m.map = visible ? map : null; });
+      }
+      zonePolygons.forEach(p => p.setMap(visible ? map : null));
+    }
+
+    sponsorsCheckbox.addEventListener('change', (e) => setSponsorsVisible(e.target.checked));
+    zonesCheckbox.addEventListener('change', (e) => setZonesVisible(e.target.checked));
+  }
+
   window.initMap = init;
 </script>
 
+<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&callback=initMap&loading=async&libraries=marker"></script>
 
 </body>
