@@ -182,6 +182,73 @@
 
   @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
+  /* Coverage Leaders — ranked list, sits below the main sponsor cards
+     as its own distinct section, per standard leaderboard-widget
+     placement (a secondary, scannable module, not competing with the
+     primary sponsor list for top billing). */
+  #leaders-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--panel-line);
+  }
+
+  #leaders-section h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--panel-ink-soft);
+    margin: 0 0 12px;
+  }
+
+  .leader-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--panel-line);
+  }
+
+  .leader-row:last-child { border-bottom: none; }
+
+  .leader-rank {
+    width: 20px;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--panel-ink-soft);
+    text-align: center;
+  }
+
+  .leader-rank.gold { color: #E8B84B; }
+  .leader-rank.silver { color: #C7CDD6; }
+  .leader-rank.bronze { color: #C87F4A; }
+
+  .leader-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .leader-count {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--mint);
+    font-weight: 500;
+  }
+
+  .leader-count .unit {
+    color: var(--panel-ink-soft);
+    font-weight: 400;
+    margin-left: 3px;
+  }
+
   .empty-state {
     color: var(--panel-ink-soft);
     font-size: 13px;
@@ -659,6 +726,10 @@
     <div id="sponsor-list">
       <div class="empty-state">Loading sponsored streets…</div>
     </div>
+    <div id="leaders-section">
+      <h2>Coverage Leaders</h2>
+      <div id="leaders-list"></div>
+    </div>
   </div>
 </div>
 
@@ -1127,7 +1198,77 @@
       return;
     }
     zones.forEach(zone => renderCoverageZone(map, zone));
+    return zones; // returned so renderLeaders can combine with sponsorships
+                  // without needing a second, separate Supabase fetch
   }
+
+  /*
+    ═══════════════════════════════════════════════════════════════
+    COVERAGE LEADERS — street-count ranking across all sponsors
+    ═══════════════════════════════════════════════════════════════
+    Combines two different data shapes into one fair comparison:
+    - map_sponsorships_public: one row = one street, so each row counts
+      as 1 toward that sponsor's total.
+    - map_coverage_zones: one row lists MULTIPLE streets in a single
+      comma-separated streets_included text field (e.g. "SE 22nd, 23rd,
+      24th... Ave"), so counting the row itself would unfairly undercount
+      a zone against single-street sponsors. Instead, this parses the
+      street list and counts each named street individually.
+
+    This is deliberately a simple, honest count — not weighted by
+    zone size/area, completion history, or anything else, since the
+    person confirmed the ranking should be by street/zone count only.
+  */
+
+  function countStreetsInZone(zone) {
+    if (!zone.streets_included) return 1; // fallback: at least count the zone itself
+    // The stored format looks like:
+    // "SE 22nd, 23rd, 24th, 25th, 26th, 27th, 28th, 29th, 30th, 32nd Ave,
+    //  between SE Holgate Blvd and SE Powell Blvd"
+    // Only the comma-separated street list before "between" should be
+    // counted — the boundary description isn't a street being covered.
+    const beforeBetween = zone.streets_included.split(/\bbetween\b/i)[0];
+    const parts = beforeBetween.split(',').map(s => s.trim()).filter(Boolean);
+    return parts.length > 0 ? parts.length : 1;
+  }
+
+  function renderLeaders(sponsorships, zones) {
+    const totals = {}; // sponsor_display_name -> street count
+
+    sponsorships.forEach(sponsor => {
+      const name = sponsor.sponsor_display_name || 'Unknown';
+      totals[name] = (totals[name] || 0) + 1;
+    });
+
+    zones.forEach(zone => {
+      const name = zone.sponsor_display_name || 'Unknown';
+      totals[name] = (totals[name] || 0) + countStreetsInZone(zone);
+    });
+
+    const ranked = Object.entries(totals)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const list = document.getElementById('leaders-list');
+    if (!list) return;
+
+    if (ranked.length === 0) {
+      list.innerHTML = '<div class="empty-state">No coverage data yet.</div>';
+      return;
+    }
+
+    const rankClass = (i) => i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+
+    list.innerHTML = ranked.map((entry, i) => `
+      <div class="leader-row">
+        <div class="leader-rank ${rankClass(i)}">${i + 1}</div>
+        <div class="leader-name">${entry.name}</div>
+        <div class="leader-count">${entry.count}<span class="unit"> street${entry.count === 1 ? '' : 's'}</span></div>
+      </div>
+    `).join('');
+  }
+
+  /* ═══════════════════ END COVERAGE LEADERS ═══════════════════ */
 
   /* ═══════════════════ END COVERAGE ZONE POLYGONS ═══════════════════ */
 
@@ -1241,7 +1382,8 @@
 
     renderSidebar(sponsorships, completionsBySegment);
     setupBottomSheet();
-    await initCoverageZones(map);
+    const zones = await initCoverageZones(map);
+    renderLeaders(sponsorships, zones || []);
 
     // Clustering — groups nearby markers into a single numbered bubble
     // until zoomed in, per the standard cluster-marker pattern used by
