@@ -302,10 +302,6 @@
     background: var(--panel-surface-raised);
   }
 
-  /* Custom popup card — replaces google.maps.InfoWindow entirely, since
-     InfoWindow's own chrome (white background shell, shadow, tail) can't be
-     fully restyled via CSS. This is a plain absolutely-positioned div we
-     control completely, closer to how Airbnb/Zillow-style map popups work. */
   #sponsor-popup {
     display: none;
     position: absolute;
@@ -439,7 +435,6 @@
 
   #sponsor-popup .popup-links a:hover { background: #57E8AB; }
 
-  /* Lightbox for before/after photo click-through */
   #photo-lightbox {
     display: none;
     position: fixed;
@@ -481,9 +476,8 @@
     line-height: 1;
   }
 
-  .gm-style .gm-style-iw-c { display: none; } /* InfoWindow no longer used — custom popup replaces it */
+  .gm-style .gm-style-iw-c { display: none; }
 
-  /* --- Collapsible bottom sheet (tablet + mobile) --- */
   #sheet-handle {
     display: none;
   }
@@ -504,11 +498,6 @@
       overflow: hidden;
     }
 
-    /* Belt-and-suspenders fix: overflow:hidden + max-height on a plain
-       block parent doesn't reliably clip block children in every browser
-       (this is a documented CSS quirk, not specific to this page) — so
-       directly hide the list content when collapsed instead of trusting
-       the parent's overflow alone to do it. */
     #sidebar:not(.expanded) #sponsor-list {
       display: none;
     }
@@ -545,7 +534,7 @@
       gap: 6px;
     }
 
-    #sidebar h2 { display: none; } /* replaced by the peek label when collapsed */
+    #sidebar h2 { display: none; }
     #sidebar.expanded h2 { display: flex; }
 
     .header-stats { display: none; }
@@ -610,13 +599,11 @@
 <script>
   const SUPABASE_URL = 'https://uunaaabykbhavngqfitw.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1bmFhYWJ5a2JoYXZuZ3FmaXR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NDM4MzUsImV4cCI6MjA2OTExOTgzNX0.S-zLL1TXOl2z5t0AnKJkacB-gwsh_hn3AKh0LG-HXPA';
-
   const PORTLAND_CENTER = { lat: 45.5152, lng: -122.6784 };
-
   const MAP_ID = '35e98e58e37c21e68f92fe43';
 
   let map;
-  const sponsorPositions = {}; // sponsor.id -> {lat, lng}, so sidebar cards can locate their marker on click
+  const sponsorPositions = {};
 
   function showError(message) {
     const banner = document.getElementById('error-banner');
@@ -741,8 +728,6 @@
       `;
       card.style.cursor = 'pointer';
       card.addEventListener('click', (e) => {
-        // Don't hijack clicks on the sponsor's own links or before/after
-        // photos inside the card — only the card body itself locates the pin.
         if (e.target.closest('a')) return;
         locateSponsorOnMap(sponsor);
       });
@@ -757,9 +742,6 @@
     map.panTo(latLng);
     if (map.getZoom() < 15) map.setZoom(15);
     openSponsorPopup(sponsor, latLng);
-    // On mobile/tablet, collapse the bottom sheet so the now-panned map
-    // and the opened popup are actually visible instead of staying hidden
-    // behind the still-expanded sheet.
     const sidebar = document.getElementById('sidebar');
     if (sidebar) sidebar.classList.remove('expanded');
   }
@@ -788,13 +770,6 @@
   let popupOverlay;
   let popupEl;
 
-  // A minimal OverlayView subclass. Its whole job is participating in
-  // Google's pane/projection system so we can convert a lat/lng into
-  // correct pixel coordinates on every map redraw — the popup DOM element
-  // itself must be moved into Google's own overlay pane in onAdd() for
-  // getProjection() to ever return a working projection. Skipping that
-  // step (as an earlier version of this file did) means draw() silently
-  // no-ops forever, which is why clicking previously did nothing visible.
   function createPopupOverlay(map) {
     class PopupOverlay extends google.maps.OverlayView {
       constructor(el) {
@@ -887,9 +862,6 @@
     `;
 
     if (hasLogo) {
-      // Solid white backing behind the image itself (not just the outer div)
-      // so a transparent-background logo with dark text never blends into
-      // whatever's behind the marker on the actual map tiles.
       const logoBacking = document.createElement('div');
       logoBacking.style.cssText = `
         width: 100%;
@@ -931,6 +903,91 @@
       properties: { sponsor_id: sponsor.id }
     })[0];
   }
+
+  /*
+    ═══════════════════════════════════════════════════════════════
+    COVERAGE ZONE POLYGONS — self-funded cleanup areas
+    ═══════════════════════════════════════════════════════════════
+    Renders shaded polygon zones (e.g. the SE 22nd–32nd corridor),
+    alongside — not replacing — the sponsor pins/street-lines above.
+    Reads from a separate Supabase table, map_coverage_zones, so this
+    can never affect or be affected by sponsor data.
+  */
+
+  const ZONE_DEFAULT_FILL = '#3DDC97';
+  const ZONE_DEFAULT_STROKE = '#3DDC97';
+  const zonePolygons = [];
+
+  async function fetchCoverageZones() {
+    return supabaseGet('map_coverage_zones?select=*');
+  }
+
+  function renderCoverageZone(map, zone) {
+    if (!zone.polygon_coords || !Array.isArray(zone.polygon_coords) || zone.polygon_coords.length < 3) {
+      console.warn('Skipping zone with invalid polygon_coords:', zone.zone_name);
+      return;
+    }
+
+    const path = zone.polygon_coords.map(pt => ({ lat: pt.lat, lng: pt.lng }));
+    const fillColor = zone.fill_color || ZONE_DEFAULT_FILL;
+
+    const polygon = new google.maps.Polygon({
+      paths: path,
+      strokeColor: ZONE_DEFAULT_STROKE,
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+      fillColor: fillColor,
+      fillOpacity: 0.18,
+      map: map,
+      clickable: true,
+      zIndex: 1
+    });
+
+    polygon.addListener('click', (event) => {
+      openZonePopup(zone, event.latLng);
+    });
+
+    zonePolygons.push(polygon);
+  }
+
+  function zoneCenter(zone) {
+    const coords = zone.polygon_coords;
+    const lat = coords.reduce((sum, p) => sum + p.lat, 0) / coords.length;
+    const lng = coords.reduce((sum, p) => sum + p.lng, 0) / coords.length;
+    return new google.maps.LatLng(lat, lng);
+  }
+
+  function openZonePopup(zone, latLng) {
+    popupEl.innerHTML = `
+      <button class="popup-close" aria-label="Close">&times;</button>
+      <div class="popup-header">
+        <div>
+          <h3>${zone.zone_name}</h3>
+          <div class="popup-badge" style="color:#3DDC97;">Self-funded coverage</div>
+        </div>
+      </div>
+      ${popupDetailRow('Streets', zone.streets_included)}
+      ${popupDetailRow('Sponsor', zone.sponsor_display_name)}
+      ${popupDetailRow('Documented', zone.completed_at ? new Date(zone.completed_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '')}
+      ${zone.description ? `<p style="font-size:12px;color:var(--panel-ink-soft);margin-top:10px;line-height:1.5;">${zone.description}</p>` : ''}
+    `;
+    popupEl.querySelector('.popup-close').addEventListener('click', closeSponsorPopup);
+    popupEl.classList.add('open');
+    popupOverlay.setPosition(latLng);
+  }
+
+  async function initCoverageZones(map) {
+    let zones = [];
+    try {
+      zones = await fetchCoverageZones();
+    } catch (err) {
+      console.error('Could not load coverage zones (non-fatal, sponsor pins unaffected):', err);
+      return;
+    }
+    zones.forEach(zone => renderCoverageZone(map, zone));
+  }
+
+  /* ═══════════════════ END COVERAGE ZONE POLYGONS ═══════════════════ */
 
   async function init() {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -1042,6 +1099,7 @@
 
     renderSidebar(sponsorships, completionsBySegment);
     setupBottomSheet();
+    initCoverageZones(map);
 
     const bounds = new google.maps.LatLngBounds();
     let hasBoundableContent = false;
@@ -1068,9 +1126,6 @@
     }
   }
 
-  // Bottom sheet interaction (tablet/mobile only — desktop sidebar is
-  // always static via CSS, this JS just becomes inert extra listeners
-  // on a handle that isn't visible at that width).
   function setupBottomSheet() {
     const sidebar = document.getElementById('sidebar');
     const handle = document.getElementById('sheet-handle');
@@ -1087,14 +1142,10 @@
     }
 
     handle.addEventListener('click', () => {
-      if (moved) return; // a swipe already decided the state; ignore the click that follows
+      if (moved) return;
       toggle();
     });
 
-    // Simple swipe-direction detection (not live-follow-the-finger — that
-    // required inline transform styles that fought with the height-based
-    // CSS above and caused a stale partial-open visual glitch). This just
-    // reads the overall direction of the gesture once it ends.
     handle.addEventListener('touchstart', (e) => {
       startY = e.touches[0].clientY;
       moved = false;
@@ -1107,7 +1158,7 @@
     handle.addEventListener('touchend', (e) => {
       if (!moved) return;
       const dy = e.changedTouches[0].clientY - startY;
-      toggle(dy < 0); // swiped up → expand, swiped down → collapse
+      toggle(dy < 0);
       setTimeout(() => { moved = false; }, 50);
     });
   }
