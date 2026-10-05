@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NVP+ Park Search</title>
+<!-- v2 (Oct 5, 2026): searches near the team's own neighborhood in any city (lat/lng/hood/city URL params),
+     nearest results first, returns park coordinates + Google place ID. Works exactly like v1 with no params. -->
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,6 +51,7 @@
   .result-info { flex: 1; min-width: 0; }
   .result-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .result-address { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-distance { font-size: 11px; font-weight: 700; color: var(--green); margin-top: 3px; }
   .result-arrow { color: var(--green); flex-shrink: 0; }
   .state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; text-align: center; gap: 12px; }
   .state-icon { font-size: 48px; line-height: 1; }
@@ -84,7 +87,7 @@
   </button>
   <div class="header-title">
     <h1>Find Your Park or Field</h1>
-    <p>Sports venues, parks & rec centers only</p>
+    <p id="header-sub">Sports venues, parks & rec centers only</p>
   </div>
   <div class="nvp-badge"><div class="nvp-dot"></div><span>NVP+</span></div>
 </div>
@@ -103,14 +106,14 @@
 <div id="invalid-toast" class="invalid-toast">⚠️ That location isn't a sports venue. Please select a park, field, court, gym, or rec center.</div>
 
 <div class="quick-section">
-  <div class="section-label">Quick search</div>
+  <div class="section-label" id="quick-label">Quick search</div>
   <div class="quick-chips">
-    <div class="chip" onclick="quickSearch(this,'parks Portland Oregon')"><span>🌳</span> All Parks</div>
-    <div class="chip" onclick="quickSearch(this,'basketball court Portland Oregon')"><span>🏀</span> Basketball</div>
-    <div class="chip" onclick="quickSearch(this,'soccer field Portland Oregon')"><span>⚽</span> Soccer</div>
-    <div class="chip" onclick="quickSearch(this,'recreation center Portland Oregon')"><span>🏋️</span> Rec Centers</div>
-    <div class="chip" onclick="quickSearch(this,'tennis court Portland Oregon')"><span>🎾</span> Tennis</div>
-    <div class="chip" onclick="quickSearch(this,'baseball field Portland Oregon')"><span>⚾</span> Baseball</div>
+    <div class="chip" onclick="quickSearch(this,'parks')"><span>🌳</span> All Parks</div>
+    <div class="chip" onclick="quickSearch(this,'basketball court')"><span>🏀</span> Basketball</div>
+    <div class="chip" onclick="quickSearch(this,'soccer field')"><span>⚽</span> Soccer</div>
+    <div class="chip" onclick="quickSearch(this,'recreation center')"><span>🏋️</span> Rec Centers</div>
+    <div class="chip" onclick="quickSearch(this,'tennis court')"><span>🎾</span> Tennis</div>
+    <div class="chip" onclick="quickSearch(this,'baseball field')"><span>⚾</span> Baseball</div>
   </div>
 </div>
 
@@ -125,83 +128,68 @@
 </div>
 
 <div class="results-section">
-  <div id="results-list">
-    <div class="state-container">
-      <div class="state-icon">🏟️</div>
-      <div class="state-title">Search Portland Parks & Fields</div>
-      <div class="state-sub">Type a venue name above or tap a quick search chip to browse by sport</div>
-    </div>
-  </div>
+  <div id="results-list"></div>
 </div>
 
 <script>
+  // ---------- Where to search (from the link Glide opens; Portland is the fallback) ----------
+  const params = new URLSearchParams(window.location.search);
+  const num = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+  const HOME = {
+    lat: num(params.get('lat')) ?? 45.5051,
+    lng: num(params.get('lng')) ?? -122.6750,
+    hood: (params.get('hood') || '').trim(),          // e.g. "Creston-Kenilworth"
+    city: (params.get('city') || 'Portland').trim(),  // e.g. "Gresham"
+  };
+  const NEAR_LABEL = HOME.hood || HOME.city;          // what we show the person
+  const AREA = `${HOME.city}, Oregon`;                // what we send to Google
+  const NEAR_RADIUS_M = 8000;                         // ~5 miles: "near you" first
+
   let selectedPlace = null;
   let autocomplete = null;
   let placesService = null;
 
-  // Allowed Google Places types for sports venues
-  const SPORTS_TYPES = [
-    'park','stadium','gym','sports_complex','university',
-    'school','campground','natural_feature','premise',
-    'establishment'
-  ];
-
-  // Blocked types — hard reject these even if they pass type check
-  const BLOCKED_TYPES = [
-    'book_store','store','restaurant','food','bar','cafe',
-    'lodging','hospital','doctor','dentist','pharmacy',
-    'bank','finance','insurance_agency','real_estate_agency',
-    'hair_care','beauty_salon','spa','shopping_mall',
-    'clothing_store','electronics_store','furniture_store',
-    'home_goods_store','hardware_store','car_dealer',
-    'car_rental','car_repair','gas_station','parking',
-    'lawyer','accounting','travel_agency','church',
-    'hindu_temple','mosque','synagogue','place_of_worship',
-    'museum','art_gallery','library','movie_theater',
-    'amusement_park','zoo','aquarium','night_club'
-  ];
-
-  // Sports/venue keywords in name — accept even if types are generic
-  const SPORTS_KEYWORDS = [
-    'park','field','court','gym','arena','stadium','rec center',
-    'recreation','sports','athletic','pool','track','rink',
-    'pitch','complex','center','centre','playground','turf',
-    'diamond','course','range','hall','pavillion','pavilion',
-    'facility','grounds','bowl','coliseum','garden'
-  ];
+  const SPORTS_TYPES = ['park','stadium','gym','sports_complex','university','school','campground','natural_feature','premise','establishment'];
+  const BLOCKED_TYPES = ['book_store','store','restaurant','food','bar','cafe','lodging','hospital','doctor','dentist','pharmacy','bank','finance','insurance_agency','real_estate_agency','hair_care','beauty_salon','spa','shopping_mall','clothing_store','electronics_store','furniture_store','home_goods_store','hardware_store','car_dealer','car_rental','car_repair','gas_station','parking','lawyer','accounting','travel_agency','church','hindu_temple','mosque','synagogue','place_of_worship','museum','art_gallery','library','movie_theater','amusement_park','zoo','aquarium','night_club'];
+  const SPORTS_KEYWORDS = ['park','field','court','gym','arena','stadium','rec center','recreation','sports','athletic','pool','track','rink','pitch','complex','center','centre','playground','turf','diamond','course','range','hall','pavillion','pavilion','facility','grounds','bowl','coliseum','garden'];
 
   function isSportsVenue(types, name) {
     if (!types) return false;
-    // Hard block — reject these immediately
-    const hasBlockedType = types.some(t => BLOCKED_TYPES.includes(t));
-    if (hasBlockedType) return false;
-    // Name keyword check — "Lents Park", "Buckman Field", etc.
+    if (types.some(t => BLOCKED_TYPES.includes(t))) return false;
     const nameLower = (name || '').toLowerCase();
-    const hasKeyword = SPORTS_KEYWORDS.some(k => nameLower.includes(k));
-    if (hasKeyword) return true;
-    // Type check
-    const hasSportsType = types.some(t => SPORTS_TYPES.includes(t));
-    return hasSportsType;
+    if (SPORTS_KEYWORDS.some(k => nameLower.includes(k))) return true;
+    return types.some(t => SPORTS_TYPES.includes(t));
+  }
+
+  // Straight-line distance in miles (to sort nearest first and show "1.2 mi away")
+  function milesFromHome(loc) {
+    if (!loc) return null;
+    const lat = typeof loc.lat === 'function' ? loc.lat() : loc.lat;
+    const lng = typeof loc.lng === 'function' ? loc.lng() : loc.lng;
+    const R = 3958.8, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat - HOME.lat), dLng = toRad(lng - HOME.lng);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(HOME.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
   }
 
   function initMap() {
+    document.getElementById('header-sub').textContent = `Sports venues near ${NEAR_LABEL}`;
+    document.getElementById('quick-label').textContent = `Quick search near ${NEAR_LABEL}`;
+    showInitial();
+
     const mapDiv = document.createElement('div');
     document.body.appendChild(mapDiv);
-    const map = new google.maps.Map(mapDiv, {
-      center: { lat: 45.5051, lng: -122.6750 },
-      zoom: 12
-    });
+    const map = new google.maps.Map(mapDiv, { center: { lat: HOME.lat, lng: HOME.lng }, zoom: 13 });
     placesService = new google.maps.places.PlacesService(map);
 
     const input = document.getElementById('pac-input');
+    const center = new google.maps.LatLng(HOME.lat, HOME.lng);
+    const nearCircle = new google.maps.Circle({ center, radius: NEAR_RADIUS_M });
 
     autocomplete = new google.maps.places.Autocomplete(input, {
       componentRestrictions: { country: 'us' },
-      bounds: new google.maps.LatLngBounds(
-        new google.maps.LatLng(45.432, -122.836),
-        new google.maps.LatLng(45.653, -122.472)
-      ),
-      strictBounds: false,
+      bounds: nearCircle.getBounds(),   // prefer places near the team's neighborhood
+      strictBounds: false,              // but still allow any park if they type its name
       fields: ['name', 'formatted_address', 'place_id', 'geometry', 'types']
     });
 
@@ -209,82 +197,79 @@
       const place = autocomplete.getPlace();
       if (!place || !place.name) return;
       if (!isSportsVenue(place.types, place.name)) {
-        showInvalidToast();
-        input.value = '';
-        hideSelected();
-        return;
+        showInvalidToast(); input.value = ''; hideSelected(); return;
       }
       hideInvalidToast();
-      selectPlace(place.name, place.formatted_address || '', place.place_id);
+      selectPlace(place);
     });
 
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && input.value.trim()) {
         e.preventDefault();
-        doSearch(input.value.trim() + ' park OR field OR court OR rec center Portland Oregon');
+        doSearch(input.value.trim() + ' park OR field OR court OR rec center');
       }
     });
 
     input.addEventListener('input', function() {
-      if (!input.value.trim()) {
-        showInitial();
-        hideSelected();
-        hideInvalidToast();
-      }
+      if (!input.value.trim()) { showInitial(); hideSelected(); hideInvalidToast(); }
     });
   }
 
-  function quickSearch(el, query) {
+  function quickSearch(el, what) {
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('pac-input').value = '';
-    hideSelected();
-    hideInvalidToast();
-    doSearch(query);
+    hideSelected(); hideInvalidToast();
+    doSearch(what);
   }
 
   function doSearch(query) {
     showLoading();
     placesService.textSearch({
-      query: query,
-      location: new google.maps.LatLng(45.5051, -122.6750),
-      radius: 30000
+      query: `${query} near ${AREA}`,
+      location: new google.maps.LatLng(HOME.lat, HOME.lng),
+      radius: NEAR_RADIUS_M
     }, function(results, status) {
       if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-        // Filter results to sports venues only
         const filtered = results.filter(p => isSportsVenue(p.types, p.name));
-        if (filtered.length > 0) {
-          renderResults(filtered.slice(0, 8));
-        } else {
-          renderResults(results.slice(0, 8)); // fallback — show all if filter removes everything
-        }
+        const list = (filtered.length > 0 ? filtered : results)
+          .map(p => ({ p, mi: milesFromHome(p.geometry && p.geometry.location) }))
+          .sort((a, b) => (a.mi ?? 999) - (b.mi ?? 999))   // nearest first
+          .slice(0, 8);
+        renderResults(list);
       } else {
-        showEmpty(status);
+        showEmpty();
       }
     });
   }
 
-  function renderResults(places) {
+  // Built with textContent (not innerHTML) so a place name can never inject code into the page
+  function renderResults(items) {
     const list = document.getElementById('results-list');
     list.innerHTML = '';
-    places.forEach((place, i) => {
+    items.forEach(({ p: place, mi }, i) => {
       const card = document.createElement('div');
       card.className = 'result-card';
       card.style.animationDelay = (i * 0.05) + 's';
-      const icon = getIcon(place.types);
-      const addr = place.formatted_address || place.vicinity || '';
-      card.innerHTML = `
-        <div class="result-icon">${icon}</div>
-        <div class="result-info">
-          <div class="result-name">${place.name}</div>
-          <div class="result-address">${addr}</div>
-        </div>
-        <div class="result-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
-      `;
+
+      const icon = document.createElement('div'); icon.className = 'result-icon'; icon.textContent = getIcon(place.types);
+      const info = document.createElement('div'); info.className = 'result-info';
+      const name = document.createElement('div'); name.className = 'result-name'; name.textContent = place.name;
+      const addr = document.createElement('div'); addr.className = 'result-address'; addr.textContent = place.formatted_address || place.vicinity || '';
+      info.append(name, addr);
+      if (mi != null) {
+        const d = document.createElement('div'); d.className = 'result-distance';
+        d.textContent = mi < 0.1 ? 'In your neighborhood' : `${mi.toFixed(1)} mi away`;
+        info.append(d);
+      }
+      const arrow = document.createElement('div'); arrow.className = 'result-arrow';
+      arrow.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+      card.append(icon, info, arrow);
+
       card.addEventListener('click', () => {
         if (!isSportsVenue(place.types, place.name)) { showInvalidToast(); return; }
         hideInvalidToast();
-        selectPlace(place.name, addr, place.place_id);
+        selectPlace(place);
       });
       list.appendChild(card);
     });
@@ -300,10 +285,17 @@
     return '🏅';
   }
 
-  function selectPlace(name, address, placeId) {
-    selectedPlace = { name, address, placeId };
-    document.getElementById('selected-name').textContent = name;
-    document.getElementById('selected-address').textContent = address;
+  function selectPlace(place) {
+    const loc = place.geometry && place.geometry.location;
+    selectedPlace = {
+      name: place.name,
+      address: place.formatted_address || place.vicinity || '',
+      placeId: place.place_id || '',
+      lat: loc ? loc.lat() : null,
+      lng: loc ? loc.lng() : null,
+    };
+    document.getElementById('selected-name').textContent = selectedPlace.name;
+    document.getElementById('selected-address').textContent = selectedPlace.address;
     document.getElementById('selected-card').classList.add('show');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -312,8 +304,12 @@
     if (!selectedPlace) return;
     showSuccess(selectedPlace.name);
     setTimeout(() => {
-      const returnUrl = new URLSearchParams(window.location.search).get('return') || 'https://go.glideapps.com/app/xVbTh0iYWLqilnIq9Yh8';
-      window.location.href = returnUrl + '?park=' + encodeURIComponent(selectedPlace.name) + '&park_address=' + encodeURIComponent(selectedPlace.address);
+      const returnUrl = params.get('return') || 'https://go.glideapps.com/app/xVbTh0iYWLqilnIq9Yh8';
+      const out = new URLSearchParams({ park: selectedPlace.name, park_address: selectedPlace.address });
+      // New in v2: exact location of the park (used for "home turf" and neighborhood tagging)
+      if (selectedPlace.lat != null) { out.set('park_lat', selectedPlace.lat.toFixed(6)); out.set('park_lng', selectedPlace.lng.toFixed(6)); }
+      if (selectedPlace.placeId) out.set('park_place_id', selectedPlace.placeId);
+      window.location.href = returnUrl + (returnUrl.includes('?') ? '&' : '?') + out.toString();
     }, 1500);
   }
 
@@ -322,40 +318,22 @@
     setTimeout(() => hideInvalidToast(), 4000);
   }
   function hideInvalidToast() { document.getElementById('invalid-toast').classList.remove('show'); }
-  function showSuccess(name) {
-    document.getElementById('results-list').innerHTML = `
-      <div class="state-container">
-        <div class="state-icon">✅</div>
-        <div class="state-title">${name}</div>
-        <div class="state-sub">Location confirmed. Returning to registration form...</div>
-        <div class="loading-dots"><span></span><span></span><span></span></div>
-      </div>`;
+  function stateBlock(icon, title, sub, dots) {
+    const list = document.getElementById('results-list');
+    list.innerHTML = '';
+    const c = document.createElement('div'); c.className = 'state-container';
+    if (icon) { const i = document.createElement('div'); i.className = 'state-icon'; i.textContent = icon; c.append(i); }
+    if (dots) { const d = document.createElement('div'); d.className = 'loading-dots'; d.innerHTML = '<span></span><span></span><span></span>'; c.append(d); }
+    if (title) { const t = document.createElement('div'); t.className = 'state-title'; t.textContent = title; c.append(t); }
+    if (sub) { const s = document.createElement('div'); s.className = 'state-sub'; s.textContent = sub; c.append(s); }
+    list.append(c);
   }
+  function showSuccess(name) { stateBlock('✅', name, 'Location confirmed. Returning to registration form...', true); }
   function handleBack() { if (window.history.length > 1) window.history.back(); else window.close(); }
   function hideSelected() { document.getElementById('selected-card').classList.remove('show'); selectedPlace = null; }
-  function showInitial() {
-    document.getElementById('results-list').innerHTML = `
-      <div class="state-container">
-        <div class="state-icon">🏟️</div>
-        <div class="state-title">Search Portland Parks & Fields</div>
-        <div class="state-sub">Type a venue name above or tap a quick search chip to browse by sport</div>
-      </div>`;
-  }
-  function showLoading() {
-    document.getElementById('results-list').innerHTML = `
-      <div class="state-container">
-        <div class="loading-dots"><span></span><span></span><span></span></div>
-        <div class="state-sub">Finding sports venues near Portland...</div>
-      </div>`;
-  }
-  function showEmpty(status) {
-    document.getElementById('results-list').innerHTML = `
-      <div class="state-container">
-        <div class="state-icon">🔍</div>
-        <div class="state-title">No Venues Found</div>
-        <div class="state-sub">Try a different search term or use the quick filters above.</div>
-      </div>`;
-  }
+  function showInitial() { stateBlock('🏟️', `Parks & fields near ${NEAR_LABEL}`, 'Type a venue name above or tap a quick search chip. Closest venues show first.'); }
+  function showLoading() { stateBlock(null, null, `Finding sports venues near ${NEAR_LABEL}...`, true); }
+  function showEmpty() { stateBlock('🔍', 'No Venues Found', 'Try a different search term or use the quick filters above.'); }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&libraries=places&callback=initMap" async defer></script>
 </body>
