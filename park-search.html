@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NVP+ Park Search</title>
-<!-- v2 (Oct 5, 2026): searches near the team's own neighborhood in any city (lat/lng/hood/city URL params),
+<!-- v3 (Oct 5, 2026): saves park via park-select; v2.1: searches near the team's own neighborhood in any city (lat/lng/hood/city URL params),
      nearest results first, returns park coordinates + Google place ID. Works exactly like v1 with no params. -->
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -238,7 +238,8 @@
           .slice(0, 8);
         renderResults(list);
       } else {
-        showEmpty();
+        console.warn('Places textSearch status:', status, 'query:', `${query} near ${AREA}`);
+        showEmpty(status);
       }
     });
   }
@@ -300,17 +301,49 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function confirmSelection() {
-    if (!selectedPlace) return;
-    showSuccess(selectedPlace.name);
-    setTimeout(() => {
-      const returnUrl = params.get('return') || 'https://go.glideapps.com/app/xVbTh0iYWLqilnIq9Yh8';
-      const out = new URLSearchParams({ park: selectedPlace.name, park_address: selectedPlace.address });
-      // New in v2: exact location of the park (used for "home turf" and neighborhood tagging)
-      if (selectedPlace.lat != null) { out.set('park_lat', selectedPlace.lat.toFixed(6)); out.set('park_lng', selectedPlace.lng.toFixed(6)); }
-      if (selectedPlace.placeId) out.set('park_place_id', selectedPlace.placeId);
-      window.location.href = returnUrl + (returnUrl.includes('?') ? '&' : '?') + out.toString();
-    }, 1500);
+  // v3: saves the park to the signed-in user's row through the park-select function,
+  // then sends them back to the app. Old links without uid still work the v1 way.
+  const SAVE_URL = 'https://uunaaabykbhavngqfitw.supabase.co/functions/v1/park-select';
+  const APP_URL = 'https://portal.neighborhoodvalueplus.com';
+  let saving = false;
+
+  async function confirmSelection() {
+    if (!selectedPlace || saving) return;
+    const uid = (params.get('uid') || '').trim();
+    if (!uid) {
+      // Legacy link (no user id): keep the old behavior
+      showSuccess(selectedPlace.name);
+      setTimeout(() => {
+        const returnUrl = params.get('return') || APP_URL;
+        const out = new URLSearchParams({ park: selectedPlace.name, park_address: selectedPlace.address });
+        window.location.href = returnUrl + (returnUrl.includes('?') ? '&' : '?') + out.toString();
+      }, 1500);
+      return;
+    }
+    saving = true;
+    const btn = document.querySelector('.confirm-btn');
+    btn.disabled = true; btn.style.opacity = '0.6';
+    stateBlock(null, null, 'Saving your home park...', true);
+    try {
+      const res = await fetch(SAVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, name: selectedPlace.name, address: selectedPlace.address,
+                               lat: selectedPlace.lat, lng: selectedPlace.lng, placeId: selectedPlace.placeId })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Save failed');
+      hideSelected();
+      stateBlock('✅', `${selectedPlace?.name || data.park} saved`, 'Returning you to the app...', true);
+      setTimeout(() => {
+        // Opened in a new tab from the app: close it. Otherwise go to the app.
+        window.close();
+        setTimeout(() => { window.location.href = params.get('return') || APP_URL; }, 400);
+      }, 1200);
+    } catch (e) {
+      saving = false; btn.disabled = false; btn.style.opacity = '1';
+      stateBlock('⚠️', "Couldn't save your park", (e && e.message) ? e.message : 'Please try again.');
+    }
   }
 
   function showInvalidToast() {
@@ -333,7 +366,12 @@
   function hideSelected() { document.getElementById('selected-card').classList.remove('show'); selectedPlace = null; }
   function showInitial() { stateBlock('🏟️', `Parks & fields near ${NEAR_LABEL}`, 'Type a venue name above or tap a quick search chip. Closest venues show first.'); }
   function showLoading() { stateBlock(null, null, `Finding sports venues near ${NEAR_LABEL}...`, true); }
-  function showEmpty() { stateBlock('🔍', 'No Venues Found', 'Try a different search term or use the quick filters above.'); }
+  // Shows Google's status code so a key/billing problem is never mistaken for "no parks"
+  function showEmpty(status) {
+    const s = String(status || '');
+    if (s === 'ZERO_RESULTS' || s === '') stateBlock('🔍', 'No Venues Found', 'Try a different search term or use the quick filters above.');
+    else stateBlock('⚠️', 'Search is temporarily unavailable', `Please try again in a minute. (Code: ${s})`);
+  }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvhU7V4buTn7Sc0fRlr_V5FA2nftN7HK8&libraries=places&callback=initMap" async defer></script>
 </body>
